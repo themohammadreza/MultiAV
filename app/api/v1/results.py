@@ -1,13 +1,20 @@
 from fastapi import APIRouter
+from app.db.session import SessionLocal
+from app.db.models import ScanJob
 
 router = APIRouter()
 
 @router.get("/{file_id}")
-def get_results(file_id: str):
-    # Will be replaced later with DB query
+def get_results(job_id: str):
+    db = SessionLocal()
+    job = db.quety(ScanJob).filter(ScanJob.id == job.id).first()
+    
+    if not job:
+        return {"error": "job not found!"}
+
     return {
-        "file_id": file_id,
-        "status": "pending",
-        "results": None
+        "job_id": job.id,
+        "status": job.status,
+        "result": [r.result for r in job.results]
     }
 
