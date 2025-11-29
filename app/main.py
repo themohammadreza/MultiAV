@@ -15,4 +15,8 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
-
+@app.on_event("startup")
+async def startup():
+    from app.db.session import Base, engine
+    from app.db import models  # Import to register models
+    Base.metadata.create_all(bind=engine)

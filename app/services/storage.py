@@ -1,12 +1,17 @@
-import os
+import os, hashlib
+from pathlib import Path
 
-STORAGE_PATH = "storage/files"
+STORAGE_DIR = Path("storage/files")
 
-os.makedirs(STORAGE_PATH, exist_ok=True)
+async def save_file(upload):
+    data = await upload.read()
+    sha256 = hashlib.sha256(data).hexdigest()
 
-def save_file(file_id: str, content: bytes) -> str:
-    path = os.path.join(STORAGE_PATH, file_id)
-    with open(path, "wb") as f:
-        f.write(content)
-    return path
+    dir_path = STORAGE_DIR / sha256
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+    file_path = dir_path / "original"
+    file_path.write_bytes(data)
+
+    return sha256, str(file_path)
 

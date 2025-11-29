@@ -11,11 +11,11 @@ class File(Base):
     __tablename__ = "files"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    sha256 = Column(unique=True, index=True)
+    sha256 = Column(String(64), unique=True, index=True)
     path = Column(String)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
-    job = relationship("ScanJob", back_populates="file")
+    jobs = relationship("ScanJob", back_populates="file")
 
 
 class ScanJob(Base):
@@ -28,7 +28,7 @@ class ScanJob(Base):
     completed_at = Column(DateTime)
 
     file = relationship("File", back_populates="jobs")
-    results = relationship("EngineResult", back_populates="jobs")
+    results = relationship("EngineResult", back_populates="job")
 
 
 class EngineResult(Base):

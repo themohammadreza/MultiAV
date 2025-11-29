@@ -7,7 +7,7 @@ router = APIRouter()
 @router.get("/{file_id}")
 def get_results(job_id: str):
     db = SessionLocal()
-    job = db.quety(ScanJob).filter(ScanJob.id == job.id).first()
+    job = db.query(ScanJob).filter(ScanJob.id == job_id).first()
     
     if not job:
         return {"error": "job not found!"}
