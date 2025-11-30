@@ -3,7 +3,9 @@ from app.db.session import SessionLocal
 from app.db.models import EngineResult, ScanJob
 from datetime import datetime
 
+
 def run_all_engines(job_id: str, file_path: str):
+
     engines = {
         "clamav": clamav.run,
         "yara": yara.run,
@@ -15,27 +17,25 @@ def run_all_engines(job_id: str, file_path: str):
     job.status = "running..."
     db.commit()
 
-
     for name, fn in engines.items():
         try:
             result = fn(file_path)
             entry = EngineResult(
-                job_id = job_id,
-                engine = name,
-                status = "success",
-                result ={"error": str(e)}
-                )
-        except Expection as e:
+                job_id=job_id,
+                engine=name,
+                status="success",
+                result=result,
+            )
+        except Exception as e:
             entry = EngineResult(
-                job_id = job_id,
-                engine = name,
-                status = "error!",
-                result ={"error": str(e)}
+                job_id=job_id,
+                engine=name,
+                status="error",
+                result={"error": str(e)},
             )
 
         db.add(entry)
         db.commit()
-
 
     job.status = "done"
     job.completed_at = datetime.utcnow()

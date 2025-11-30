@@ -6,5 +6,5 @@ celery_app = Celery(
     backend='redis://localhost:6379/1',
 )
 
-celery_app.conf.task_routes = {"app.workers.task.*": {"queue": "scans"}}
+celery_app.autodiscover_tasks(["app.workers"])
 
