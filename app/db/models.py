@@ -44,4 +44,3 @@ class EngineResult(Base):
     scanned_at = Column(DateTime, default=datetime.utcnow)
 
     job = relationship("ScanJob", back_populates="results")
-

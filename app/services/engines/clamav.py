@@ -1,8 +1,9 @@
 import clamd
 import os
 
+from app.core.config import settings
 # connection to clamd
-cd = clamd.ClamdUnixSocket(path="/var/run/clamav/clamd.ctl")
+cd = clamd.ClamdUnixSocket(path=settings.CLAMAV_SOCKET)
 
 def run(file_path: str):
     FILE_PATH = os.path.abspath(file_path)
