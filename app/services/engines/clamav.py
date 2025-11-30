@@ -1,2 +1,41 @@
+import clamd
+import os
+
+# connection to clamd
+cd = clamd.ClamdUnixSocket(path="/var/run/clamav/clamd.ctl")
+
 def run(file_path: str):
-    return {"message": "clamav stub"}
+    FILE_PATH = os.path.abspath(file_path)
+
+    try:
+        with open(FILE_PATH, 'rb') as f:
+            response = cd.instream(f)
+        # Example Response: {'/path/to/file': ('FOUND', 'Win.Trojan.Test')}
+    except Exception as e:
+        return {
+            "file_path": FILE_PATH,
+            "engne": "ClamAV",
+            "malicious": None,
+            "signature": None,
+            "details": {"error": str(e)}
+        }
+
+    status, signature = response['stream']
+
+    if response == "FOUND":
+        return {
+            "file_path": FILE_PATH ,
+            "engine": "ClamAV",
+            "malicious": True,
+            "signature": signature,
+            "details": response,
+        }
+
+    
+    return {
+        "file_path": FILE_PATH ,
+        "engine": "ClamAV",
+        "malicious": True,
+        "signature": signature,
+        "details": response,
+        }
