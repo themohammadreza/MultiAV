@@ -14,7 +14,7 @@ def run(file_path: str):
     except Exception as e:
         return {
             "file_path": FILE_PATH,
-            "engne": "ClamAV",
+            "engine": "ClamAV",
             "malicious": None,
             "signature": None,
             "details": {"error": str(e)}
@@ -22,7 +22,7 @@ def run(file_path: str):
 
     status, signature = response['stream']
 
-    if response == "FOUND":
+    if status == "FOUND":
         return {
             "file_path": FILE_PATH ,
             "engine": "ClamAV",
@@ -35,7 +35,7 @@ def run(file_path: str):
     return {
         "file_path": FILE_PATH ,
         "engine": "ClamAV",
-        "malicious": True,
-        "signature": signature,
+        "malicious": False,
+        "signature": None,
         "details": response,
         }
