@@ -3,15 +3,13 @@ from sqlalchemy import create_engine
 
 from app.core.config import settings
 
-# SQLALCHEMY_DATABASE_URL = "postgresql://multiav_user:mohammad@localhost:5432/multiav_db"
-
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
 def get_db():
-    db = SessionLocal
+    db = SessionLocal()
     try:
         yield db
     finally:
