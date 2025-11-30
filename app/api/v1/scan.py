@@ -2,6 +2,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
 import hashlib
 from uuid import uuid4
+from datetime import datetime, timezone
+import pytz
 
 from app.services.storage import save_file
 from app.db.session import get_db
@@ -15,16 +17,22 @@ router = APIRouter()
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     sha256, path = await save_file(file)
 
+    iran_tz = pytz.timezone('Asia/Tehran')
+
     # check cache
     existing = db.query(FileModel).filter(FileModel.sha256 == sha256).first()
     if existing:
         latest_job = db.query(ScanJob).filter(
         ScanJob.file_id == existing.id).order_by(ScanJob.created_at.desc()).first()
 
+        # Convert UTC to Tehran time
+        first_scan = existing.uploaded_at.astimezone(iran_tz)
+
         return {
             "job_id": latest_job.id,
             "status": latest_job.status,
             "cached": True,
+            "scanned_at": first_scan.isoformat(),
         }
 
     # if it's a new file

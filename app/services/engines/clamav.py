@@ -29,6 +29,7 @@ def run(file_path: str):
             "engine": "ClamAV",
             "malicious": True,
             "signature": signature,
+            "confidence": 1.0,
             "details": response,
         }
 
@@ -38,5 +39,6 @@ def run(file_path: str):
         "engine": "ClamAV",
         "malicious": False,
         "signature": None,
+        "confidence": 0.0,
         "details": response,
         }
