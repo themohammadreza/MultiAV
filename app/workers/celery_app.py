@@ -24,11 +24,7 @@ celery.conf.update(
 
 # ensure your tasks module is imported so tasks get registered
 # adjust the import path if your tasks live elsewhere
-try:
-    import workers.tasks  # noqa: F401
-except Exception:
-    # log/handle import error in real code; keep silent here to avoid startup crash
-    pass
+from app.workers import tasks
 
 def create_celery_app():
     """Return the configured Celery instance (useful for FastAPI integration/tests)."""

@@ -1,32 +1,36 @@
 import yara
 import os
 import time
+from pathlib import Path
 
 from app.services.engines.schema import normalize_engine_result
 
-# Make rules dir absolute (relative to this file)
-RULES_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "rules", "yara")
-)
+# yara.py -> engines -> services -> app -> PROJECT_ROOT
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+RULES_DIR = PROJECT_ROOT / "rules" / "yara"
 
 def load_rules():
     rule_files = {}
 
-    if not os.path.isdir(RULES_DIR):
-        return None  # No rules directory
+    if not RULES_DIR.is_dir():
+        print(f"YARA rules directory not found: {RULES_DIR}")  # Debug
+        return None
 
     for fname in os.listdir(RULES_DIR):
         if fname.endswith(".yar") or fname.endswith(".yara"):
             key = fname
-            path = os.path.join(RULES_DIR, fname)
-            rule_files[key] = path
+            path = RULES_DIR / fname
+            rule_files[key] = str(path)
 
     if not rule_files:
+        print(f"No .yar/.yara files found in: {RULES_DIR}")  # Debug
         return None
 
     try:
+        print(f"Loading YARA rules: {list(rule_files.keys())}")  # Debug
         return yara.compile(filepaths=rule_files)
-    except yara.Error:
+    except yara.Error as e:
+        print(f"YARA compile error: {e}")  # Debug
         return None
 
 rules = load_rules()
