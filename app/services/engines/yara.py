@@ -4,30 +4,37 @@ import time
 
 from app.services.engines.schema import normalize_engine_result
 
-RULES_DIR = "rules/yara"
+# Make rules dir absolute (relative to this file)
+RULES_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "rules", "yara")
+)
 
 def load_rules():
     rule_files = {}
 
-    for file_name in os.listdir(RULES_DIR):
-        if file_name.endswith(".yar") or file_name.endswith(".yara"):
-            key = file_name
-            path = os.path.join(RULES_DIR, file_name)
+    if not os.path.isdir(RULES_DIR):
+        return None  # No rules directory
 
+    for fname in os.listdir(RULES_DIR):
+        if fname.endswith(".yar") or fname.endswith(".yara"):
+            key = fname
+            path = os.path.join(RULES_DIR, fname)
             rule_files[key] = path
 
     if not rule_files:
         return None
 
-    
-    return yara.compile(filepaths=rule_files)
+    try:
+        return yara.compile(filepaths=rule_files)
+    except yara.Error:
+        return None
 
 rules = load_rules()
 
 def run(file_path: str):
     start = time.time()
 
-    if rules is none:
+    if rules is None:
         return normalize_engine_result(
             engine="yara",
             detected=False,
@@ -40,24 +47,61 @@ def run(file_path: str):
         )
 
     try:
-        matches = rules.match(file_path)
+        matches = rules.match(filepath=file_path)
+    except Exception as e:
+        return normalize_engine_result(
+            engine="yara",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="error",
+            confidence=0.0,
+            details={"error": str(e)}
+        )
 
-        detected = len(matches) > 0
+    detected = bool(matches)
 
-        if not detected: # no matches
-             return normalize_engine_result(
-                engine="yara",
-                detected=False,
-                signature=None,
-                malware_family=None,
-                category=None,
-                severity="low",
-                confidence=0.0,
-                details={
-                    "scan_time_ms": int((time.time() - start) * 1000),
-                    "matches": []
-                }
-            )
+    if not detected:
+        return normalize_engine_result(
+            engine="yara",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="low",
+            confidence=0.0,
+            details={
+                "scan_time_ms": int((time.time() - start) * 1000),
+                "matches": []
+            }
+        )
 
+    match_list = []
+    for m in matches:
+        match_list.append({
+            "rule": getattr(m, "rule", None),
+            "tags": getattr(m, "tags", []),
+            "meta": getattr(m, "meta", {}),
+        })
 
+    primary = match_list[0] if match_list else {}
+    signature = primary.get("rule") if isinstance(primary, dict) else None
+    meta = primary.get("meta") if isinstance(primary, dict) else {}
+    malware_family = meta.get("family") if isinstance(meta, dict) else None
+    category = meta.get("category") if isinstance(meta, dict) else None
+
+    return normalize_engine_result(
+        engine="yara",
+        detected=True,
+        signature=signature,
+        malware_family=malware_family,
+        category=category,
+        severity="high",
+        confidence=1.0,
+        details={
+            "scan_time_ms": int((time.time() - start) * 1000),
+            "matches": match_list
+        }
+    )
 
