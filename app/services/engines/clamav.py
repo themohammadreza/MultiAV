@@ -1,5 +1,6 @@
 import clamd
 import os
+import time
 
 from app.core.config import settings
 from app.services.engines.schema import normalize_engine_result
@@ -8,6 +9,7 @@ from app.services.engines.schema import normalize_engine_result
 cd = clamd.ClamdUnixSocket(path=settings.CLAMAV_SOCKET)
 
 def run(file_path: str):
+    start = time.time()
     FILE_PATH = os.path.abspath(file_path)
 
     try:
@@ -23,7 +25,7 @@ def run(file_path: str):
             category=None,
             severity="error",
             confidence=0.0,
-            details={"error": str(e)}
+            details={"error": str(e), "scan_time_ms": int((time.time() - start) * 1000)}
         )
 
     status, signature = response['stream']
@@ -48,7 +50,7 @@ def run(file_path: str):
             category=category,
             severity="high",
             confidence=1.0,
-            details=response
+            details={**response, "scan_time_ms": int((time.time() - start) * 1000)}
         )
 
     return normalize_engine_result(
@@ -59,5 +61,5 @@ def run(file_path: str):
         category=None,
         severity="low",
         confidence=0.0,
-        details=response
+        details={**response, "scan_time_ms": int((time.time() - start) * 1000)}
     )

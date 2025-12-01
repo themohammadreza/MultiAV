@@ -61,7 +61,7 @@ def run(file_path: str):
             category=None,
             severity="error",
             confidence=0.0,
-            details={"error": str(e)}
+            details={"error": str(e), "scan_time_ms": int((time.time() - start) * 1000)}
         )
 
     detected = bool(matches)
