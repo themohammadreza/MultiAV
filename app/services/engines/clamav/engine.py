@@ -2,6 +2,7 @@ import clamd
 import os
 import time
 import sys
+import re
 
 # Prefer TCP host:port when set (for container-to-container connections), otherwise fallback to local socket.
 DEFAULT_SOCKET = os.getenv("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl")
@@ -59,18 +60,16 @@ def get_connection(max_retries: int = 5, delay_seconds: int = 2):
 
 def parse_signature(signature: str):
     """
-    Split signature by "-" or "." and return (family, category).
-    Example: "Eicar-Signature" -> ("Eicar", "Signature")
-             "Win.Trojan.Zusy" -> ("Win", "Trojan")
+    Split signature by common separators to derive family and category.
+    Examples:
+      - "Eicar-Signature" -> ("Eicar", "Signature")
+      - "Win.Trojan.Zusy" -> ("Win", "Trojan")
+      - "Pdf.Dropper.Agent-7145616-0" -> ("Pdf", "Dropper")
     """
     if not signature:
         return None, None
 
-    if "-" in signature:
-        parts = signature.split("-")
-    else:
-        parts = signature.split(".")
-
+    parts = [p for p in re.split(r"[-.]", signature) if p]
     family = parts[0] if parts else None
     category = parts[1] if len(parts) > 1 else None
     return family, category
