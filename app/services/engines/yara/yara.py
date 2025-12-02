@@ -2,10 +2,7 @@ import yara
 import os
 import time
 from pathlib import Path
-<<<<<<< HEAD
-=======
 import re
->>>>>>> dev
 
 from app.services.engines.schema import normalize_engine_result
 
@@ -14,37 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 RULES_DIR = PROJECT_ROOT / "rules" / "yara"
 
 def load_rules():
-<<<<<<< HEAD
-    rule_files = {}
-
-    if not RULES_DIR.is_dir():
-        print(f"YARA rules directory not found: {RULES_DIR}")  # Debug
-        return None
-
-    for fname in os.listdir(RULES_DIR):
-        if fname.endswith(".yar") or fname.endswith(".yara"):
-            key = fname
-            path = RULES_DIR / fname
-            rule_files[key] = str(path)
-
-    if not rule_files:
-        print(f"No .yar/.yara files found in: {RULES_DIR}")  # Debug
-        return None
-
-    try:
-        print(f"Loading YARA rules: {list(rule_files.keys())}")  # Debug
-        return yara.compile(filepaths=rule_files)
-    except yara.Error as e:
-        print(f"YARA compile error: {e}")  # Debug
-        return None
-
-rules = load_rules()
-
-def run(file_path: str):
-    start = time.time()
-
-    if rules is None:
-=======
     if not RULES_DIR.is_dir():
         print(f"YARA rules directory not found: {RULES_DIR}")
         return None
@@ -107,7 +73,6 @@ def run(file_path: str):
     start = time.time()
 
     if not rules:
->>>>>>> dev
         return normalize_engine_result(
             engine="yara",
             detected=False,
@@ -119,21 +84,6 @@ def run(file_path: str):
             details={"error": "No YARA rules loaded"}
         )
 
-<<<<<<< HEAD
-    try:
-        matches = rules.match(filepath=file_path)
-    except Exception as e:
-        return normalize_engine_result(
-            engine="yara",
-            detected=False,
-            signature=None,
-            malware_family=None,
-            category=None,
-            severity="error",
-            confidence=0.0,
-            details={"error": str(e), "scan_time_ms": int((time.time() - start) * 1000)}
-        )
-=======
     all_matches = []
     for rule_set in rules:
         try:
@@ -143,7 +93,6 @@ def run(file_path: str):
 
     # Filter out placeholder dict errors from match objects
     matches = [m for m in all_matches if not isinstance(m, dict)]
->>>>>>> dev
 
     detected = bool(matches)
 
@@ -176,14 +125,11 @@ def run(file_path: str):
     malware_family = meta.get("family") if isinstance(meta, dict) else None
     category = meta.get("category") if isinstance(meta, dict) else None
 
-<<<<<<< HEAD
-=======
     if not malware_family or not category:
         inferred_family, inferred_category = parse_signature(signature or "")
         malware_family = malware_family or inferred_family
         category = category or inferred_category
 
->>>>>>> dev
     return normalize_engine_result(
         engine="yara",
         detected=True,
@@ -197,7 +143,3 @@ def run(file_path: str):
             "matches": match_list
         }
     )
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
