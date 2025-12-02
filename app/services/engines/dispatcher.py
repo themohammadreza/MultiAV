@@ -1,4 +1,5 @@
-from . import clamav, yara
+from app.services.engines.clamav.engine import run as clamav_run
+from app.services.engines.yara.yara import run as yara_run
 from app.db.session import SessionLocal
 from app.db.models import EngineResult, ScanJob
 from datetime import datetime
@@ -7,8 +8,8 @@ from datetime import datetime
 def run_all_engines(job_id: str, file_path: str):
 
     engines = {
-        "clamav": clamav.run,
-        "yara": yara.run,
+        "clamav": clamav_run,
+        "yara": yara_run,
     }
 
     db = SessionLocal()
@@ -41,4 +42,3 @@ def run_all_engines(job_id: str, file_path: str):
     job.completed_at = datetime.utcnow()
     db.commit()
     db.close()
-
