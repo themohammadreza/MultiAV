@@ -8,18 +8,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clamav-daemon \
     clamav-freshclam \
     ca-certificates \
+    netcat-openbsd \
+    curl \
+    tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure clamd for both TCP (default) and local socket
-RUN sed -i 's/^Example/#Example/' /etc/clamav/clamd.conf \
-    && sed -i 's/^#TCPSocket .*/TCPSocket 3310/' /etc/clamav/clamd.conf \
-    && sed -i 's/^#TCPAddr .*/TCPAddr 0.0.0.0/' /etc/clamav/clamd.conf \
-    && sed -i 's~^#LocalSocket .*~LocalSocket /var/run/clamav/clamd.ctl~' /etc/clamav/clamd.conf \
-    && sed -i 's~^#Foreground .*~Foreground yes~' /etc/clamav/clamd.conf \
-    && sed -i 's~^#LogFile /var/log/clamav/clamd.log~LogFile /var/log/clamav/clamd.log~' /etc/clamav/clamd.conf \
-    && sed -i 's/^#LogTime/LogTime yes/' /etc/clamav/clamd.conf \
-    && sed -i 's/^Example/#Example/' /etc/clamav/freshclam.conf \
-    && sed -i 's/^#DatabaseMirror .*/DatabaseMirror database.clamav.net/' /etc/clamav/freshclam.conf \
+# Configure clamd for TCP (no host socket) + logs in foreground
+RUN set -eux; \
+    sed -i 's/^Example/#Example/' /etc/clamav/clamd.conf; \
+    sed -i '/^LocalSocket /d' /etc/clamav/clamd.conf; \
+    sed -i '/^TCPSocket /d' /etc/clamav/clamd.conf; \
+    sed -i '/^TCPAddr /d' /etc/clamav/clamd.conf; \
+    sed -i '/^Foreground /d' /etc/clamav/clamd.conf; \
+    sed -i '/^LogFile /d' /etc/clamav/clamd.conf; \
+    sed -i '/^LogTime /d' /etc/clamav/clamd.conf; \
+    cat >> /etc/clamav/clamd.conf <<'EOF'
+TCPSocket 3310
+TCPAddr 0.0.0.0
+#LocalSocket disabled
+Foreground yes
+LogFile /var/log/clamav/clamd.log
+LogTime yes
+EOF
+RUN sed -i 's/^Example/#Example/' /etc/clamav/freshclam.conf \
     && sed -i 's/^#Checks .*/Checks 12/' /etc/clamav/freshclam.conf
 
 # Runtime folders + permissions
@@ -39,8 +50,8 @@ RUN chmod +x /entrypoint.sh
 
 EXPOSE 3310
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD clamdscan --ping || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5m --retries=5 \
+    CMD clamdscan --ping --config-file=/etc/clamav/clamd.conf || exit 1
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["clamd", "-F"]
+ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
+CMD ["clamd"]

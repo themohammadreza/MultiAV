@@ -1,0 +1,10 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+SQLAlchemy==2.0.29
+psycopg2-binary==2.9.9
+celery==5.3.6
+redis==5.0.4
+python-multipart==0.0.9
+pytz==2024.1
+clamd==1.0.2
+yara-python==4.5.0
