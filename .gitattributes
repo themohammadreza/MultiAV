@@ -1,0 +1,2 @@
+*.yara linguist-detectable=false
+*.yar linguist-detectable=false
