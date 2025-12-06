@@ -10,7 +10,8 @@ DEFAULT_HOST = os.getenv("CLAMAV_HOST")
 DEFAULT_PORT = int(os.getenv("CLAMAV_PORT", "3310"))
 
 cd = None
-DEFAULT_ENGINE_NAME = "clamav"
+DEFAULT_ENGINE_NAME = "ClamAV"
+DEFAULT_ENGINE_TYPE = "Antivirus"
 DEFAULT_VERSION = "1.4.3"
 
 try:
@@ -83,30 +84,40 @@ def _parse_response(response, start_time: float):
         malware_family, category = parse_signature(signature)
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="ok",
             detected=True,
             signature=signature,
             malware_family=malware_family,
             category=category,
             severity="high",
-            confidence=0.95,
+            confidence=1.0,
+            duration_ms=scan_time_ms,
             details={
-                "scan_time_ms": scan_time_ms,
                 "version": DEFAULT_VERSION,
-            }
+                "scan_time_ms": scan_time_ms,
+            },
+            raw=response,
         )
 
     return normalize_engine_result(
         engine=DEFAULT_ENGINE_NAME,
+        engine_type=DEFAULT_ENGINE_TYPE,
+        engine_version=DEFAULT_VERSION,
+        status="ok",
         detected=False,
         signature=None,
         malware_family=None,
         category=None,
         severity="informational",
         confidence=0.0,
+        duration_ms=scan_time_ms,
         details={
-            "scan_time_ms": scan_time_ms,
             "version": DEFAULT_VERSION,
-        }
+            "scan_time_ms": scan_time_ms,
+        },
+        raw=response,
     )
 
 
@@ -122,17 +133,21 @@ def run(file_path: str):
     if not os.path.exists(FILE_PATH):
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="error",
             detected=False,
             signature=None,
             malware_family=None,
             category=None,
-            severity="error",
+            severity="informational",
             confidence=0.0,
+            duration_ms=0,
+            error=f"File not found: {FILE_PATH}",
             details={
-                "scan_time_ms": 0,
                 "version": DEFAULT_VERSION,
-                "error": f"File not found: {FILE_PATH}"
-            }
+                "scan_time_ms": 0,
+            },
         )
 
     try:
@@ -151,33 +166,41 @@ def run(file_path: str):
         except Exception as reconnection_exc:  # noqa: BLE001
             return normalize_engine_result(
                 engine=DEFAULT_ENGINE_NAME,
+                engine_type=DEFAULT_ENGINE_TYPE,
+                engine_version=DEFAULT_VERSION,
+                status="error",
                 detected=False,
                 signature=None,
                 malware_family=None,
                 category=None,
-                severity="error",
+                severity="informational",
                 confidence=0.0,
+                duration_ms=int((time.time() - start_time) * 1000),
+                error=f"Connection error: {str(e)}; reconnection attempt failed: {reconnection_exc}",
                 details={
-                    "scan_time_ms": int((time.time() - start_time) * 1000),
                     "version": DEFAULT_VERSION,
-                    "error": f"Connection error: {str(e)}; reconnection attempt failed: {reconnection_exc}"
-                }
+                    "scan_time_ms": int((time.time() - start_time) * 1000),
+                },
             )
 
     except Exception as e:
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="error",
             detected=False,
             signature=None,
             malware_family=None,
             category=None,
-            severity="error",
+            severity="informational",
             confidence=0.0,
+            duration_ms=int((time.time() - start_time) * 1000),
+            error=str(e),
             details={
-                "scan_time_ms": int((time.time() - start_time) * 1000),
                 "version": DEFAULT_VERSION,
-                "error": str(e)
-            }
+                "scan_time_ms": int((time.time() - start_time) * 1000),
+            },
         )
 
 # Test function for standalone execution

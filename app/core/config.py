@@ -10,5 +10,8 @@ class Settings:
     )
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     CLAMAV_SOCKET: str = os.getenv("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl")
+    WINDEFENDER_HOST: str = os.getenv("WINDEFENDER_HOST", "windows-defender")
+    WINDEFENDER_PORT: int = int(os.getenv("WINDEFENDER_PORT", "3993"))
+    WINDEFENDER_TIMEOUT: int = int(os.getenv("WINDEFENDER_TIMEOUT", "120"))
 
 settings = Settings()
