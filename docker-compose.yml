@@ -49,6 +49,14 @@ services:
       redis:
         condition: service_healthy
 
+  windows-defender:
+    image: malice/windows-defender
+    container_name: multiav-windows-defender
+    command: ["web"]
+    ports:
+      - "3993:3993"
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -64,6 +72,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       CLAMAV_HOST: clamav
       CLAMAV_PORT: 3310
+      WINDEFENDER_HOST: windows-defender
+      WINDEFENDER_PORT: 3993
       STORAGE_PATH: /app/storage/files
     volumes:
       - ./storage:/app/storage
@@ -76,6 +86,8 @@ services:
         condition: service_healthy
       clamav:
         condition: service_healthy
+      windows-defender:
+        condition: service_started
     restart: unless-stopped
 
   worker:
@@ -93,6 +105,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       CLAMAV_HOST: clamav
       CLAMAV_PORT: 3310
+      WINDEFENDER_HOST: windows-defender
+      WINDEFENDER_PORT: 3993
       STORAGE_PATH: /app/storage/files
     volumes:
       - ./storage:/app/storage
@@ -103,6 +117,8 @@ services:
         condition: service_healthy
       clamav:
         condition: service_healthy
+      windows-defender:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
