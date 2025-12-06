@@ -1,14 +1,19 @@
 import yara
-import os
 import time
 from pathlib import Path
 import re
 
-from app.services.engines.schema import normalize_engine_result
+from app.services.engines.schema import (
+    SEVERITY_LEVELS,
+    normalize_engine_result,
+)
 
 # yara.py -> engines -> services -> app -> PROJECT_ROOT
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 RULES_DIR = PROJECT_ROOT / "rules" / "yara"
+ENGINE_NAME = "YARA"
+ENGINE_TYPE = "Pattern Matcher"
+ENGINE_VERSION = getattr(yara, "__version__", None)
 
 def load_rules():
     if not RULES_DIR.is_dir():
@@ -73,42 +78,54 @@ def run(file_path: str):
     start = time.time()
 
     if not rules:
+        duration_ms = int((time.time() - start) * 1000)
         return normalize_engine_result(
-            engine="yara",
+            engine=ENGINE_NAME,
+            engine_type=ENGINE_TYPE,
+            engine_version=ENGINE_VERSION,
+            status="error",
             detected=False,
             signature=None,
             malware_family=None,
             category=None,
             severity="informational",
             confidence=0.0,
-            details={"error": "No YARA rules loaded"}
+            duration_ms=duration_ms,
+            error="No YARA rules loaded",
+            details={"scan_time_ms": duration_ms},
         )
 
-    all_matches = []
+    matches = []
+    errors = []
     for rule_set in rules:
         try:
-            all_matches.extend(rule_set.match(filepath=file_path))
+            matches.extend(rule_set.match(filepath=file_path))
         except Exception as e:
-            all_matches.append({"error": str(e)})
-
-    # Filter out placeholder dict errors from match objects
-    matches = [m for m in all_matches if not isinstance(m, dict)]
+            errors.append(str(e))
 
     detected = bool(matches)
+    duration_ms = int((time.time() - start) * 1000)
 
     if not detected:
         return normalize_engine_result(
-            engine="yara",
+            engine=ENGINE_NAME,
+            engine_type=ENGINE_TYPE,
+            engine_version=ENGINE_VERSION,
+            status="ok",
             detected=False,
             signature=None,
             malware_family=None,
             category=None,
-            severity="low",
+            severity="informational",
             confidence=0.0,
+            duration_ms=duration_ms,
             details={
-                "scan_time_ms": int((time.time() - start) * 1000),
-                "matches": []
-            }
+                "match_count": 0,
+                "matches": [],
+                "scan_time_ms": duration_ms,
+                "errors": errors,
+            },
+            raw={"errors": errors} if errors else None,
         )
 
     match_list = []
@@ -130,16 +147,39 @@ def run(file_path: str):
         malware_family = malware_family or inferred_family
         category = category or inferred_category
 
+    meta_severity = (meta.get("severity") if isinstance(meta, dict) else None) or "high"
+    severity = meta_severity.lower() if isinstance(meta_severity, str) else "high"
+    if severity not in SEVERITY_LEVELS:
+        severity = "high"
+
+    meta_confidence = meta.get("confidence") if isinstance(meta, dict) else None
+    confidence = None
+    if isinstance(meta_confidence, (int, float)):
+        confidence = meta_confidence
+    elif isinstance(meta_confidence, str):
+        try:
+            confidence = float(meta_confidence)
+        except ValueError:
+            confidence = None
+    confidence = 1.0 if confidence is None else confidence
+
     return normalize_engine_result(
-        engine="yara",
+        engine=ENGINE_NAME,
+        engine_type=ENGINE_TYPE,
+        engine_version=ENGINE_VERSION,
+        status="ok",
         detected=True,
         signature=signature,
         malware_family=malware_family,
         category=category,
-        severity="high",
-        confidence=1.0,
+        severity=severity,
+        confidence=confidence,
+        duration_ms=duration_ms,
         details={
-            "scan_time_ms": int((time.time() - start) * 1000),
-            "matches": match_list
-        }
+            "match_count": len(match_list),
+            "matches": match_list,
+            "scan_time_ms": duration_ms,
+            "errors": errors,
+        },
+        raw={"matches": match_list, "errors": errors} if errors else {"matches": match_list},
     )
