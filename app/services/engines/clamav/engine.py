@@ -2,7 +2,6 @@ import clamd
 import os
 import time
 import sys
-import re
 
 # Prefer TCP host:port when set (for container-to-container connections), otherwise fallback to local socket.
 DEFAULT_SOCKET = os.getenv("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl")
@@ -15,7 +14,7 @@ DEFAULT_ENGINE_TYPE = "Antivirus"
 DEFAULT_VERSION = "1.4.3"
 
 try:
-    from app.services.engines.schema import normalize_engine_result
+    from app.services.aggregator.normalize import normalize_engine_result
 except Exception:
     # Fallback for execution in container path layout
     from schema import normalize_engine_result  # type: ignore
@@ -59,29 +58,11 @@ def get_connection(max_retries: int = 5, delay_seconds: int = 2):
 
     raise RuntimeError(f"Failed to connect to clamd: {last_exc}")
 
-def parse_signature(signature: str):
-    """
-    Split signature by common separators to derive family and category.
-    Examples:
-      - "Eicar-Signature" -> ("Eicar", "Signature")
-      - "Win.Trojan.Zusy" -> ("Win", "Trojan")
-      - "Pdf.Dropper.Agent-7145616-0" -> ("Pdf", "Dropper")
-    """
-    if not signature:
-        return None, None
-
-    parts = [p for p in re.split(r"[-.]", signature) if p]
-    family = parts[0] if parts else None
-    category = parts[1] if len(parts) > 1 else None
-    return family, category
-
-
 def _parse_response(response, start_time: float):
     scan_time_ms = int((time.time() - start_time) * 1000)
     status, signature = response.get('stream', (None, None))
 
     if status == "FOUND":
-        malware_family, category = parse_signature(signature)
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,
             engine_type=DEFAULT_ENGINE_TYPE,
@@ -89,8 +70,6 @@ def _parse_response(response, start_time: float):
             status="ok",
             detected=True,
             signature=signature,
-            malware_family=malware_family,
-            category=category,
             severity="high",
             confidence=1.0,
             duration_ms=scan_time_ms,

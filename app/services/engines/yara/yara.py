@@ -1,9 +1,7 @@
 import yara
 import time
 from pathlib import Path
-import re
-
-from app.services.engines.schema import (
+from app.services.aggregator.normalize import (
     SEVERITY_LEVELS,
     normalize_engine_result,
 )
@@ -58,21 +56,6 @@ def load_rules():
 
 rules = load_rules()
 
-
-def parse_signature(signature: str):
-    """
-    Split signature/rule names by common separators to infer family/category.
-    Examples:
-      - "invalid_trailer_structure" -> ("invalid", "trailer")
-      - "Pdf.Dropper.Agent-7145616-0" -> ("Pdf", "Dropper")
-    """
-    if not signature:
-        return None, None
-
-    parts = [p for p in re.split(r"[-._]", signature) if p]
-    family = parts[0] if parts else None
-    category = parts[1] if len(parts) > 1 else None
-    return family, category
 
 def run(file_path: str):
     start = time.time()
@@ -139,13 +122,6 @@ def run(file_path: str):
     primary = match_list[0] if match_list else {}
     signature = primary.get("rule") if isinstance(primary, dict) else None
     meta = primary.get("meta") if isinstance(primary, dict) else {}
-    malware_family = meta.get("family") if isinstance(meta, dict) else None
-    category = meta.get("category") if isinstance(meta, dict) else None
-
-    if not malware_family or not category:
-        inferred_family, inferred_category = parse_signature(signature or "")
-        malware_family = malware_family or inferred_family
-        category = category or inferred_category
 
     meta_severity = (meta.get("severity") if isinstance(meta, dict) else None) or "high"
     severity = meta_severity.lower() if isinstance(meta_severity, str) else "high"
@@ -170,8 +146,6 @@ def run(file_path: str):
         status="ok",
         detected=True,
         signature=signature,
-        malware_family=malware_family,
-        category=category,
         severity=severity,
         confidence=confidence,
         duration_ms=duration_ms,

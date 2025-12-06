@@ -1,13 +1,12 @@
 import os
 import time
 from pathlib import Path
-import re
 from typing import Any, Dict, Optional
 
 import requests
 
 try:
-    from app.services.engines.schema import normalize_engine_result
+    from app.services.aggregator.normalize import normalize_engine_result
 except Exception:
     from schema import normalize_engine_result  # type: ignore
 
@@ -27,22 +26,6 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes", "y"}
     return False
-
-
-def parse_signature(signature: Optional[str]):
-    """
-    Split a signature string to derive family and category.
-    Examples:
-      - "Virus:DOS/EICAR_Test_File" -> ("Virus", "DOS")
-      - "Backdoor:Win32/Zegost" -> ("Backdoor", "Win32")
-    """
-    if not signature:
-        return None, None
-
-    parts = [p for p in re.split(r"[:/._-]", signature) if p]
-    family = parts[0] if parts else None
-    category = parts[1] if len(parts) > 1 else None
-    return family, category
 
 
 def _extract_result_block(payload: Any) -> Optional[Dict[str, Any]]:
@@ -182,8 +165,6 @@ def run(file_path: str):
     engine_version = str(result_block.get("engine")) if isinstance(result_block, dict) and result_block.get("engine") else None
     updated_at = result_block.get("updated") if isinstance(result_block, dict) else None
 
-    malware_family, category = parse_signature(signature)
-
     severity = "high" if infected else "informational"
     confidence = 1.0 if infected else 0.0
 
@@ -194,8 +175,6 @@ def run(file_path: str):
         status="ok",
         detected=infected,
         signature=signature,
-        malware_family=malware_family,
-        category=category,
         severity=severity,
         confidence=confidence,
         duration_ms=duration_ms,

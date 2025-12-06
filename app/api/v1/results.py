@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ScanJob
 from app.db.session import get_db
+from app.services.aggregator.summary import summarize_job
 
 router = APIRouter()
 
@@ -35,8 +36,10 @@ def get_results(job_id: str, db: Session = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail=NOT_FOUND_MESSAGE)
 
-    return {
-        "job_id": str(job.id),
-        "status": job.status,
-        "result": [r.result for r in job.results]
-    }
+    # Sort results for stable output (oldest first)
+    engine_results = sorted(
+        job.results,
+        key=lambda r: r.scanned_at or job.created_at,
+    )
+
+    return summarize_job(job, engine_results)

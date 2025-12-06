@@ -1,0 +1,81 @@
+from datetime import datetime
+from typing import Callable, Dict
+
+from app.db.models import EngineResult, ScanJob
+from app.db.session import SessionLocal
+from app.services.engines.clamav.engine import run as clamav_run
+from app.services.engines.windows_defender.engine import run as windows_defender_run
+from app.services.engines.yara.yara import run as yara_run
+
+EngineRunner = Callable[[str], dict]
+
+
+def _engine_registry() -> Dict[str, EngineRunner]:
+    """Return the list of engines to execute and their runners."""
+    return {
+        "clamav": clamav_run,
+        "yara": yara_run,
+        "windows-defender": windows_defender_run,
+    }
+
+
+def run_all_engines(job_id: str, file_path: str) -> None:
+    """Execute all configured engines for a job and persist their results.
+
+    Args:
+        job_id: UUID of the ScanJob as a string.
+        file_path: Absolute path to the file to scan.
+    """
+    db = SessionLocal()
+    try:
+        job = db.query(ScanJob).filter(ScanJob.id == job_id).first()
+        if not job:
+            return
+
+        job.status = "running..."
+        db.commit()
+
+        for name, runner in _engine_registry().items():
+            _run_engine(db, runner, name, job_id, file_path)
+
+        job.status = "done"
+        job.completed_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+
+def _run_engine(
+    db,
+    runner: EngineRunner,
+    name: str,
+    job_id: str,
+    file_path: str,
+) -> None:
+    """Run a single engine, capturing success or error.
+
+    Args:
+        db: Active SQLAlchemy session.
+        runner: Callable that scans a file path and returns a result payload.
+        name: Engine name used for persistence and reporting.
+        job_id: UUID of the ScanJob as a string.
+        file_path: Absolute path to the file to scan.
+    """
+    try:
+        result_payload = runner(file_path)
+        entry = EngineResult(
+            job_id=job_id,
+            engine=name,
+            status="success",
+            result=result_payload,
+        )
+    except Exception as exc:
+        entry = EngineResult(
+            job_id=job_id,
+            engine=name,
+            status="error",
+            result={"error": str(exc)},
+        )
+
+    db.add(entry)
+    db.commit()

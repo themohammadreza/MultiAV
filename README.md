@@ -5,12 +5,14 @@ MultiAV is a FastAPI-based multi-engine malware scanning service. It exposes RES
 
 ## System architecture
 - **API service** (`app/main.py`): FastAPI application that wires the v1 scan and results routers and initializes the database schema on startup.
-- **Worker** (`app/workers/tasks.py`): Celery worker that executes scan jobs by invoking the engine dispatcher.
+- **Worker** (`app/workers/tasks.py`): Celery worker that executes scan jobs by invoking the orchestrator dispatcher.
+- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Runs all configured engines and records per-engine results.
+- **Aggregator** (`app/services/aggregator/*`): Normalizes engine payloads, performs weighted voting/confidence, and summarizes the final verdict exposed by the results API.
 - **Persistence**:
   - PostgreSQL for relational data (files, scan jobs, engine results) configured in `docker-compose.yml`.
   - Local storage for uploaded binaries at `storage/files/<sha256>/original` (`app/services/storage.py`).
 - **Message broker**: Redis for Celery broker and result backend (configured via environment variables and compose file).
-- **Engines**: ClamAV (`app/services/engines/clamav`), Windows Defender (`app/services/engines/windows_defender` via the malice microservice), and YARA (`app/services/engines/yara`) provide detection coverage; results are normalized through the shared schema helper (`app/services/engines/schema.py`).
+- **Engines**: ClamAV (`app/services/engines/clamav`), Windows Defender (`app/services/engines/windows_defender` via the malice microservice), and YARA (`app/services/engines/yara`) provide detection coverage; results are normalized through the shared helper (`app/services/aggregator/normalize.py`).
 
 ## Data model
 The SQLAlchemy models in `app/db/models.py` define three core tables:
@@ -23,20 +25,20 @@ The SQLAlchemy models in `app/db/models.py` define three core tables:
    - Reads the upload, computes SHA-256, and persists the file under its hash. If the hash already exists, the latest job status is returned from cache.
    - For new files, creates `File` and `ScanJob` rows, then enqueues `run_scan(job_id, path)` via Celery.
 2. **Worker execution** (`run_scan` in `app/workers/tasks.py`): calls the dispatcher with the job ID and file path.
-3. **Engine dispatcher** (`app/services/engines/dispatcher.py`):
+3. **Engine dispatcher** (`app/services/orchestrator/dispatcher.py`):
    - Marks the job as `running...`.
    - Executes each engine (ClamAV, Windows Defender, YARA) sequentially, persisting an `EngineResult` with `success` or `error` status and normalized payload.
    - Marks the job `done` and records completion time.
-4. **Result retrieval** (`GET /api/v1/results/{job_id}`): returns job status and list of engine result payloads; 404 is raised for unknown jobs.
+4. **Result retrieval** (`GET /api/v1/results/{job_id}`): returns an aggregated verdict with weighted confidence/severity plus a `details` map of each engine result; 404 is raised for unknown jobs.
 
 ## Engine behaviors
 ### ClamAV
 - Connects via TCP (`CLAMAV_HOST`/`CLAMAV_PORT`) or UNIX socket (`CLAMAV_SOCKET`) with retry logic.
-- Parses signature strings to infer malware family and category, attaches scan duration and engine version metadata, and gracefully reports connection errors.
+- Attaches scan duration and engine version metadata, and gracefully reports connection errors.
 
 ### YARA
 - Loads compiled rules from `rules/yara`. Prefers `index.yar` if present; otherwise compiles all `.yar`/`.yara` files, logging any compile failures.
-- Matches produce rule, tags, and meta fields; family/category are derived from meta or inferred from the rule name. Returns normalized detections with match details and scan time.
+- Matches produce rule, tags, and meta fields; returns normalized detections with match details and scan time. Family/category inference is handled centrally by the aggregator.
 
 ### Windows Defender (malice/windows-defender)
 - Runs the upstream `malice/windows-defender` image in `web` mode (port 3993) and POSTs files to `/scan` with form field `malware`.
