@@ -1,15 +1,19 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.services.aggregator.confidence import weight_for_engine
 
 
-def weighted_verdict(results: List[Dict]) -> str:
+def weighted_verdict(
+    results: List[Dict],
+    engine_weights: Optional[Dict[str, float]] = None,
+) -> str:
     """Compute a verdict via weighted voting across engines."""
     votes = {"malicious": 0.0, "clean": 0.0, "suspicious": 0.0}
     error_weight = 0.0
 
     for result in results:
-        weight = weight_for_engine(result.get("engine", ""))
+        engine_name = result.get("engine_key") or result.get("engine", "")
+        weight = weight_for_engine(engine_name, engine_weights)
         status = (result.get("status") or "").lower()
         if status != "ok":
             error_weight += weight
@@ -44,4 +48,3 @@ def weighted_verdict(results: List[Dict]) -> str:
         return "suspicious"
 
     return "malicious" if votes["malicious"] >= votes["clean"] else "clean"
-

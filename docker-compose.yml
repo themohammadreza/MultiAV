@@ -77,6 +77,7 @@ services:
       STORAGE_PATH: /app/storage/files
     volumes:
       - ./storage:/app/storage
+      - ./config:/app/config:ro
     ports:
       - "8000:8000"
     depends_on:
@@ -110,6 +111,7 @@ services:
       STORAGE_PATH: /app/storage/files
     volumes:
       - ./storage:/app/storage
+      - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,22 +1,25 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-ENGINE_WEIGHTS: Dict[str, float] = {
-    # Heavier weights for engines with broad community trust
-    "windows-defender": 0.34,
-    "clamav": 0.26,
-    "yara": 0.18,
-}
+from app.services.orchestrator.registry import DEFAULT_ENGINE_WEIGHT
 
-DEFAULT_WEIGHT = 0.15
+DEFAULT_WEIGHT = DEFAULT_ENGINE_WEIGHT
 
 
-def weight_for_engine(engine: str) -> float:
+def weight_for_engine(engine: str, engine_weights: Optional[Dict[str, float]] = None) -> float:
     """Return the trust weight for an engine name (case-insensitive)."""
     key = (engine or "").lower()
-    return ENGINE_WEIGHTS.get(key, DEFAULT_WEIGHT)
+    try:
+        weight = float((engine_weights or {}).get(key, DEFAULT_WEIGHT))
+        return DEFAULT_WEIGHT if weight <= 0 else weight
+    except (TypeError, ValueError):
+        return DEFAULT_WEIGHT
 
 
-def weighted_confidence(results: List[Dict], final_verdict: str) -> float:
+def weighted_confidence(
+    results: List[Dict],
+    final_verdict: str,
+    engine_weights: Optional[Dict[str, float]] = None,
+) -> float:
     """Aggregate confidence using engine trust weights and verdict alignment."""
     total_weight = 0.0
     confidence_weighted = 0.0
@@ -24,8 +27,8 @@ def weighted_confidence(results: List[Dict], final_verdict: str) -> float:
     error_weight = 0.0
 
     for result in results:
-        engine_name = result.get("engine", "")
-        weight = weight_for_engine(engine_name)
+        engine_name = result.get("engine_key") or result.get("engine", "")
+        weight = weight_for_engine(engine_name, engine_weights)
         total_weight += weight
 
         status = (result.get("status") or "").lower()

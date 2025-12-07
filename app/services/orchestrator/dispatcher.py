@@ -1,22 +1,24 @@
 from datetime import datetime
-from typing import Callable, Dict
+from typing import Callable
 
 from app.db.models import EngineResult, ScanJob
 from app.db.session import SessionLocal
-from app.services.engines.clamav.engine import run as clamav_run
-from app.services.engines.windows_defender.engine import run as windows_defender_run
-from app.services.engines.yara.yara import run as yara_run
+from app.services.orchestrator.registry import get_active_engines
 
 EngineRunner = Callable[[str], dict]
 
 
-def _engine_registry() -> Dict[str, EngineRunner]:
-    """Return the list of engines to execute and their runners."""
-    return {
-        "clamav": clamav_run,
-        "yara": yara_run,
-        "windows-defender": windows_defender_run,
-    }
+def _record_dispatch_error(db, job_id: str, message: str) -> None:
+    """Persist a dispatcher-level error to aid troubleshooting."""
+    db.add(
+        EngineResult(
+            job_id=job_id,
+            engine="Orchestrator",
+            status="error",
+            result={"error": message},
+        )
+    )
+    db.commit()
 
 
 def run_all_engines(job_id: str, file_path: str) -> None:
@@ -35,12 +37,26 @@ def run_all_engines(job_id: str, file_path: str) -> None:
         job.status = "running..."
         db.commit()
 
-        for name, runner in _engine_registry().items():
-            _run_engine(db, runner, name, job_id, file_path)
+        try:
+            engine_registry = get_active_engines()
+            if not engine_registry:
+                _record_dispatch_error(db, job_id, "No engines configured or enabled")
+                job.status = "error"
+                job.completed_at = datetime.utcnow()
+                db.commit()
+                return
 
-        job.status = "done"
-        job.completed_at = datetime.utcnow()
-        db.commit()
+            for name, definition in engine_registry.items():
+                _run_engine(db, definition["runner"], name, job_id, file_path)
+
+            job.status = "done"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 - log and persist failure instead of dropping job
+            _record_dispatch_error(db, job_id, f"Dispatcher failure: {exc}")
+            job.status = "error"
+            job.completed_at = datetime.utcnow()
+            db.commit()
     finally:
         db.close()
 
