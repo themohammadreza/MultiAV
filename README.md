@@ -6,7 +6,7 @@ MultiAV is a FastAPI-based multi-engine malware scanning service. It exposes RES
 ## System architecture
 - **API service** (`app/main.py`): FastAPI application that wires the v1 scan and results routers and initializes the database schema on startup.
 - **Worker** (`app/workers/tasks.py`): Celery worker that executes scan jobs by invoking the orchestrator dispatcher.
-- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Runs all configured engines and records per-engine results.
+- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Runs all engines from the dynamic registry and records per-engine results.
 - **Aggregator** (`app/services/aggregator/*`): Normalizes engine payloads, performs weighted voting/confidence, and summarizes the final verdict exposed by the results API.
 - **Persistence**:
   - PostgreSQL for relational data (files, scan jobs, engine results) configured in `docker-compose.yml`.
@@ -49,9 +49,13 @@ The SQLAlchemy models in `app/db/models.py` define three core tables:
 ## Configuration
 Default settings live in `app/core/config.py` and are overridden via environment variables. `docker-compose.yml` wires the defaults for local development (PostgreSQL, Redis, ClamAV, API, and worker containers) and mounts `./storage` into the app for persisted uploads.
 
+### Engine registry (YAML-driven)
+- Edit `config/engines.yaml` to enable/disable engines and adjust weights/timeouts without changing code.
+- The `app` and `worker` containers mount `./config` read-only and also bake this file into the image; override the path with `ENGINE_CONFIG_PATH` if you want a different location.
+
 ## Running locally
 1. Install Docker and Docker Compose.
-2. From the repository root, run `docker compose up --build` to start PostgreSQL, Redis, ClamAV, Windows Defender (port 3993), the API server (port 8000), and the Celery worker.
+2. From the repository root, run `docker compose up --build` to start PostgreSQL, Redis, ClamAV, Windows Defender (port 3993), the API server (port 8000), and the Celery worker. Updates to `config/engines.yaml` are picked up on container restart (no code rebuild required).
 3. Submit files to `POST http://localhost:8000/api/v1/scan/` and poll `GET http://localhost:8000/api/v1/results/{job_id}` for statuses and results.
 
 You can also open `http://localhost:8000/docs` and use the FastAPI Swagger UI to upload files through the interactive form, receive the returned UUIDs, and fetch results without crafting manual requests.
