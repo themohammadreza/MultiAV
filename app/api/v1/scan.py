@@ -52,7 +52,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 
     run_scan.delay(str(job.id), path)
 
-    return {"job.id": str(job.id),
+    return {"job_id": str(job.id),
             "status": "queued",
             "cached": False,
             }
