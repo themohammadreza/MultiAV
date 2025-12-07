@@ -1,64 +1,86 @@
-# MultiAV Technical Documentation
+MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It ingests files over HTTP, runs them through multiple AV/static-analysis engines, normalizes the outputs, and returns a single aggregated verdict with per-engine details.
 
-## Overview
-MultiAV is a FastAPI-based multi-engine malware scanning service. It exposes REST endpoints for uploading files and retrieving scan results, orchestrates asynchronous scanning jobs via Celery, and aggregates normalized findings from ClamAV, Windows Defender, and YARA engines. Persistent state is stored in PostgreSQL, while Redis backs Celery queues. File contents are stored on the local filesystem for repeatable scans.
+## Final goal
+- Ship a production-ready, horizontally scalable multi-engine scanner with pluggable engines, weighted aggregation, and simple ops (one-command docker-compose for local, K8s-ready later).
+- Let operators toggle engines and tune weights from config without code edits.
+- Provide clear APIs for uploading files, polling results, and wiring into other security workflows.
 
-## System architecture
-- **API service** (`app/main.py`): FastAPI application that wires the v1 scan and results routers and initializes the database schema on startup.
-- **Worker** (`app/workers/tasks.py`): Celery worker that executes scan jobs by invoking the orchestrator dispatcher.
-- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Runs all engines from the dynamic registry and records per-engine results.
-- **Aggregator** (`app/services/aggregator/*`): Normalizes engine payloads, performs weighted voting/confidence, and summarizes the final verdict exposed by the results API.
-- **Persistence**:
-  - PostgreSQL for relational data (files, scan jobs, engine results) configured in `docker-compose.yml`.
-  - Local storage for uploaded binaries at `storage/files/<sha256>/original` (`app/services/storage.py`).
-- **Message broker**: Redis for Celery broker and result backend (configured via environment variables and compose file).
-- **Engines**: ClamAV (`app/services/engines/clamav`), Windows Defender (`app/services/engines/windows_defender` via the malice microservice), and YARA (`app/services/engines/yara`) provide detection coverage; results are normalized through the shared helper (`app/services/aggregator/normalize.py`).
+## Architecture at a glance
+- **API (FastAPI, `app/main.py`)**: exposes `/api/v1/scan/` to upload and `/api/v1/results/{job_id}` to retrieve aggregated verdicts.
+- **Worker (Celery, `app/workers/tasks.py`)**: dequeues scan jobs and calls the orchestrator.
+- **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, executes them sequentially, and persists results.
+- **Engines (`app/services/engines/*`)**:
+  - ClamAV daemon (TCP or UNIX socket)
+  - YARA rules compiled from `rules/yara`
+  - Windows Defender via `malice/windows-defender`
+- **Aggregation (`app/services/aggregator/*`)**: normalizes engine payloads, applies weights, derives verdict/severity/confidence, and infers families/categories.
+- **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, filesystem storage at `storage/files/<sha256>/original` for uploaded binaries.
+- **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, and Windows Defender wired together with healthchecks and mounted config/storage.
 
-## Data model
-The SQLAlchemy models in `app/db/models.py` define three core tables:
-- **File**: stores the SHA-256 hash, filesystem path, and upload timestamp.
-- **ScanJob**: links to a file, tracks lifecycle status (`pending...`, `running...`, `done`), creation, and completion times.
-- **EngineResult**: one per engine execution, capturing engine name, status, normalized result payload, and scan timestamp.
+## Project layout (opinionated guide)
+- `app/main.py` — FastAPI app factory and router wiring; creates DB schema on startup for local/dev.
+- `app/api/v1/scan.py` — upload endpoint; hashes file, caches by SHA-256, enqueues Celery job.
+- `app/api/v1/results.py` — fetch results by job UUID; returns aggregated summary + per-engine details.
+- `app/services/orchestrator/dispatcher.py` — runs enabled engines, records success/error, updates job status.
+- `app/services/orchestrator/registry.py` — loads `config/engines.yaml`, applies defaults, and produces the active engine registry with weights/timeouts.
+- `app/services/aggregator/` — normalize engine outputs, vote on verdicts, calculate severity/confidence, and infer malware families.
+- `app/services/engines/clamav|windows_defender|yara/` — individual engine runners and (for ClamAV) Dockerfile.
+- `app/services/storage.py` — saves uploads to `storage/files`, keyed by SHA-256 for cache hits.
+- `app/core/config.py` — environment-driven settings (DB/Redis/engine hosts, storage path).
+- `app/db/models.py` & `app/db/session.py` — SQLAlchemy models and session/engine factory.
+- `config/engines.yaml` — enable/disable engines and tune weights/timeouts.
+- `docker-compose.yml` — local stack definition; mounts `./storage` and `./config` into app/worker.
+- `Dockerfile` — app image builder used by API and worker services.
+- `technical-docs.md` — deeper, lower-level technical notes.
+- `tests/` — starting point for automated coverage (extend here as you add features).
+- `setup-docker-mirror.sh` — optional helper to point Docker at an alternate registry mirror (uses sudo).
 
-## Request flow
-1. **Upload** (`POST /api/v1/scan/` in `app/api/v1/scan.py`):
-   - Reads the upload, computes SHA-256, and persists the file under its hash. If the hash already exists, the latest job status is returned from cache.
-   - For new files, creates `File` and `ScanJob` rows, then enqueues `run_scan(job_id, path)` via Celery.
-2. **Worker execution** (`run_scan` in `app/workers/tasks.py`): calls the dispatcher with the job ID and file path.
-3. **Engine dispatcher** (`app/services/orchestrator/dispatcher.py`):
-   - Marks the job as `running...`.
-   - Executes each engine (ClamAV, Windows Defender, YARA) sequentially, persisting an `EngineResult` with `success` or `error` status and normalized payload.
-   - Marks the job `done` and records completion time.
-4. **Result retrieval** (`GET /api/v1/results/{job_id}`): returns an aggregated verdict with weighted confidence/severity plus a `details` map of each engine result; 404 is raised for unknown jobs.
+## Contributors: run it locally
+### Prerequisites
+- Docker and Docker Compose
+- ~8 GB free disk for images (ClamAV DB + Windows Defender image are chunky)
+- Ports free: 8000 (API), 3310 (ClamAV), 3993 (Windows Defender), 55432 (Postgres), 6380 (Redis)
 
-## Engine behaviors
-### ClamAV
-- Connects via TCP (`CLAMAV_HOST`/`CLAMAV_PORT`) or UNIX socket (`CLAMAV_SOCKET`) with retry logic.
-- Attaches scan duration and engine version metadata, and gracefully reports connection errors.
+### Quick start
+1. From the repo root, build and launch everything:
+   ```bash
+   docker compose up --build
+   ```
+   This starts Postgres, Redis, ClamAV, Windows Defender, the FastAPI app, and the Celery worker.
+2. Upload a file:
+   ```bash
+   curl -F "file=@/path/to/sample.bin" http://localhost:8000/api/v1/scan/
+   ```
+   Note the returned `job_id`.
+3. Poll results:
+   ```bash
+   curl http://localhost:8000/api/v1/results/<job_id>
+   ```
+   Or open `http://localhost:8000/docs` for Swagger UI.
 
-### YARA
-- Loads compiled rules from `rules/yara`. Prefers `index.yar` if present; otherwise compiles all `.yar`/`.yara` files, logging any compile failures.
-- Matches produce rule, tags, and meta fields; returns normalized detections with match details and scan time. Family/category inference is handled centrally by the aggregator.
+### Engine switches and tuning
+- Edit `config/engines.yaml` to toggle engines or adjust weights/timeouts:
+  ```yaml
+  engines:
+    clamav:
+      enabled: true
+      weight: 0.26
+      timeout: 30
+  ```
+- Restart the app/worker containers to pick up changes:
+  ```bash
+  docker compose restart app worker
+  ```
+- **There is no need to touch the codebase to disable or reweight an engine—flip the YAML and restart.**
 
-### Windows Defender (malice/windows-defender)
-- Runs the upstream `malice/windows-defender` image in `web` mode (port 3993) and POSTs files to `/scan` with form field `malware`.
-- Normalizes the plugin JSON (`infected`, `result`, `engine`, `updated`) into the shared schema; infected results are treated as high severity with full confidence.
-- Configurable via `WINDEFENDER_HOST`, `WINDEFENDER_PORT`, and `WINDEFENDER_TIMEOUT` (defaults: `windows-defender`, `3993`, `120s`).
-- Docker Hub status checked 2024-10-16: repository is marked `active` (not deprecated); last published update was 2022-09-25.
+## API surface (v1)
+- `POST /api/v1/scan/` — multipart upload (`file` field). Returns `{job_id, status, cached, scanned_at?}`.
+- `GET /api/v1/results/{job_id}` — aggregated verdict, severity/confidence, families/categories, and `details` keyed by engine.
 
-## Configuration
-Default settings live in `app/core/config.py` and are overridden via environment variables. `docker-compose.yml` wires the defaults for local development (PostgreSQL, Redis, ClamAV, API, and worker containers) and mounts `./storage` into the app for persisted uploads.
-
-### Engine registry (YAML-driven)
-- Edit `config/engines.yaml` to enable/disable engines and adjust weights/timeouts without changing code.
-- The `app` and `worker` containers mount `./config` read-only and also bake this file into the image; override the path with `ENGINE_CONFIG_PATH` if you want a different location.
-
-## Running locally
-1. Install Docker and Docker Compose.
-2. From the repository root, run `docker compose up --build` to start PostgreSQL, Redis, ClamAV, Windows Defender (port 3993), the API server (port 8000), and the Celery worker. Updates to `config/engines.yaml` are picked up on container restart (no code rebuild required).
-3. Submit files to `POST http://localhost:8000/api/v1/scan/` and poll `GET http://localhost:8000/api/v1/results/{job_id}` for statuses and results.
-
-You can also open `http://localhost:8000/docs` and use the FastAPI Swagger UI to upload files through the interactive form, receive the returned UUIDs, and fetch results without crafting manual requests.
-
-## Docker mirror for sanctioned regions
-Run `./setup-docker-mirror.sh` to rewrite `/etc/docker/daemon.json` (uses `sudo`) so Docker pulls via `https://registry.docker.ir` as both an insecure registry and registry mirror. The script restarts Docker automatically to apply the change. This helps work around Docker Hub sanctions/blocks.
+## Roadmap / still to build
+- Parallel or prioritized engine execution (today runs sequentially).
+- Pluggable object storage (e.g., MinIO/S3) instead of local `storage/files`.
+- Production-grade health monitoring, metrics, and structured logging across services.
+- Hardened retries/backoff per engine and clearer error surfacing.
+- CI/CD with automated tests, linting, and sample corpus regression runs.
+- Optional auth/rate limiting on the API and per-tenant quotas.
