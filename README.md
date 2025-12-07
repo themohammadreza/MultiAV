@@ -55,3 +55,6 @@ Default settings live in `app/core/config.py` and are overridden via environment
 3. Submit files to `POST http://localhost:8000/api/v1/scan/` and poll `GET http://localhost:8000/api/v1/results/{job_id}` for statuses and results.
 
 You can also open `http://localhost:8000/docs` and use the FastAPI Swagger UI to upload files through the interactive form, receive the returned UUIDs, and fetch results without crafting manual requests.
+
+## Docker mirror for sanctioned regions
+Run `./setup-docker-mirror.sh` to rewrite `/etc/docker/daemon.json` (uses `sudo`) so Docker pulls via `https://registry.docker.ir` as both an insecure registry and registry mirror. The script restarts Docker automatically to apply the change. This helps work around Docker Hub sanctions/blocks.
