@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -33,6 +33,9 @@ class ScanJob(Base):
 
 class EngineResult(Base):
     __tablename__ = "engine_results"
+    __table_args__ = (
+        UniqueConstraint("job_id", "engine", name="uq_engine_results_job_engine"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     job_id = Column(UUID(as_uuid=True), ForeignKey("scan_jobs.id"))
