@@ -55,9 +55,10 @@ class StorageService:
             logger.info("Bucket %s not found, attempting creation", self.bucket)
             try:
                 create_kwargs = {"Bucket": self.bucket}
-                if settings.STORAGE_S3_REGION:
+                region = settings.STORAGE_S3_REGION
+                if region and region != "us-east-1":
                     create_kwargs["CreateBucketConfiguration"] = {
-                        "LocationConstraint": settings.STORAGE_S3_REGION
+                        "LocationConstraint": region
                     }
                 self._client.create_bucket(**create_kwargs)
             except ClientError as exc:  # noqa: BLE001 - surface bucket provisioning issues
@@ -105,13 +106,25 @@ class StorageService:
 
     def ensure_local_copy(self, location: str) -> Tuple[str, Callable[[], None]]:
         if self.backend == "s3":
+            path_obj = Path(location)
+            if path_obj.exists():
+                return str(path_obj), lambda: None
+
             temp = NamedTemporaryFile(delete=False)
             try:
                 self._client.download_fileobj(self.bucket, location, temp)
                 temp.flush()
                 return temp.name, lambda: self._safe_cleanup(temp.name)
+            except ClientError as exc:
+                self._safe_cleanup(temp.name)
+                error_code = exc.response.get("Error", {}).get("Code") if exc.response else None
+                if error_code == "NoSuchKey" and path_obj.exists():
+                    return str(path_obj), lambda: None
+                raise
             except Exception as exc:  # noqa: BLE001 - caller must handle download failures
                 self._safe_cleanup(temp.name)
+                if path_obj.exists():
+                    return str(path_obj), lambda: None
                 raise exc
         if not Path(location).exists():
             raise FileNotFoundError(f"Local file missing: {location}")
@@ -125,6 +138,8 @@ class StorageService:
 
         migrated = 0
         records = db_session.query(File).all()
+        cleanup_paths = []
+
         for record in records:
             path_value = record.path
             if not path_value:
@@ -140,12 +155,21 @@ class StorageService:
 
             if not self._object_exists(key):
                 self._client.upload_file(str(path_obj), self.bucket, key)
+            cleanup_paths.append(path_obj)
             record.path = key
             migrated += 1
 
         if migrated:
             db_session.commit()
             logger.info("Migrated %s local files to object storage", migrated)
+            for path_obj in cleanup_paths:
+                self._safe_cleanup(str(path_obj))
+                parent = path_obj.parent
+                try:
+                    parent.rmdir()
+                except OSError:
+                    # Directory not empty or removal failed; ignore
+                    pass
         return migrated
 
     def _safe_cleanup(self, file_path: str) -> None:
