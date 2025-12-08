@@ -5,8 +5,8 @@ MultiAV is a FastAPI-based multi-engine malware scanning service. It exposes RES
 
 ## System architecture
 - **API service** (`app/main.py`): FastAPI application that wires the v1 scan and results routers and initializes the database schema on startup.
-- **Worker** (`app/workers/tasks.py`): Celery worker that executes scan jobs by invoking the orchestrator dispatcher.
-- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Runs all engines from the dynamic registry and records per-engine results.
+- **Worker** (`app/workers/tasks.py`): Celery worker that orchestrates a chord per scan (fan-out engine tasks, fan-in finalizer).
+- **Orchestrator** (`app/services/orchestrator/dispatcher.py`): Loads enabled engines from the registry, records one `EngineResult` per engine per job (upsert-safe), and finalizes job status/verdict.
 - **Aggregator** (`app/services/aggregator/*`): Normalizes engine payloads, performs weighted voting/confidence, and summarizes the final verdict exposed by the results API.
 - **Persistence**:
   - PostgreSQL for relational data (files, scan jobs, engine results) configured in `docker-compose.yml`.
@@ -17,19 +17,25 @@ MultiAV is a FastAPI-based multi-engine malware scanning service. It exposes RES
 ## Data model
 The SQLAlchemy models in `app/db/models.py` define three core tables:
 - **File**: stores the SHA-256 hash, filesystem path, and upload timestamp.
-- **ScanJob**: links to a file, tracks lifecycle status (`pending...`, `running...`, `done`), creation, and completion times.
-- **EngineResult**: one per engine execution, capturing engine name, status, normalized result payload, and scan timestamp.
+- **ScanJob**: links to a file, tracks lifecycle status (`pending...`, `running...`, `done`, `done_with_errors`, `error`), creation, and completion times.
+- **EngineResult**: one per engine execution, capturing engine name, status, normalized result payload, and scan timestamp. A DB unique constraint (`uq_engine_results_job_engine`) enforces one row per `(job_id, engine)` to keep fan-out writes consistent.
 
 ## Request flow
 1. **Upload** (`POST /api/v1/scan/` in `app/api/v1/scan.py`):
    - Reads the upload, computes SHA-256, and persists the file under its hash. If the hash already exists, the latest job status is returned from cache.
    - For new files, creates `File` and `ScanJob` rows, then enqueues `run_scan(job_id, path)` via Celery.
-2. **Worker execution** (`run_scan` in `app/workers/tasks.py`): calls the dispatcher with the job ID and file path.
-3. **Engine dispatcher** (`app/services/orchestrator/dispatcher.py`):
-   - Marks the job as `running...`.
-   - Executes each engine (ClamAV, Windows Defender, YARA) sequentially, persisting an `EngineResult` with `success` or `error` status and normalized payload.
-   - Marks the job `done` and records completion time.
-4. **Result retrieval** (`GET /api/v1/results/{job_id}`): returns an aggregated verdict with weighted confidence/severity plus a `details` map of each engine result; 404 is raised for unknown jobs.
+2. **Worker orchestration** (`run_scan` in `app/workers/tasks.py`):
+   - Marks the job `running...`.
+   - Builds a chord: one `run_engine_task` per enabled engine (parallel fan-out with per-engine time limits) plus a `finalize_job` callback (fan-in).
+   - Schedules the chord; errors in scheduling or chord execution are recorded as orchestrator errors without leaving jobs stuck.
+3. **Engine tasks** (`run_engine_task`):
+   - Resolve the engine runner from the registry; if disabled/missing, record an error result and return.
+   - Execute the engine with a Celery soft time limit; on success/error/timeout, upsert a single `EngineResult` row for `(job_id, engine)` with status and payload.
+   - Small in-task retry protects persistence; failures to persist are recorded as orchestrator errors.
+4. **Finalizer** (`finalize_job`):
+   - Loads all results for the job, sets job status: `done` when all succeeded, `done_with_errors` when mixed, `error` when all failed/none.
+   - Stamps `completed_at` and returns the aggregated summary (verdict, confidence, severity, families, per-engine `details`).
+5. **Result retrieval** (`GET /api/v1/results/{job_id}`): returns the summary; 404 is raised for unknown job IDs.
 
 ## Engine behaviors
 ### ClamAV

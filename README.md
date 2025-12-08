@@ -7,8 +7,8 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 
 ## Architecture at a glance
 - **API (FastAPI, `app/main.py`)**: exposes `/api/v1/scan/` to upload and `/api/v1/results/{job_id}` to retrieve aggregated verdicts.
-- **Worker (Celery, `app/workers/tasks.py`)**: dequeues scan jobs and calls the orchestrator.
-- **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, executes them sequentially, and persists results.
+- **Worker (Celery, `app/workers/tasks.py`)**: orchestrates a Celery chord per scan: fan-out one task per enabled engines, then a fan-in callback to finalize the job.
+- **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, records per-engine results (one row per engine per job), updates job status, and returns aggregated summaries.
 - **Engines (`app/services/engines/*`)**:
   - ClamAV daemon (TCP or UNIX socket)
   - YARA rules compiled from `rules/yara`
@@ -21,7 +21,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - `app/main.py` — FastAPI app factory and router wiring; creates DB schema on startup for local/dev.
 - `app/api/v1/scan.py` — upload endpoint; hashes file, caches by SHA-256, enqueues Celery job.
 - `app/api/v1/results.py` — fetch results by job UUID; returns aggregated summary + per-engine details.
-- `app/services/orchestrator/dispatcher.py` — runs enabled engines, records success/error, updates job status.
+- `app/services/orchestrator/dispatcher.py` — runs enabled engines in parallel via Celery chord, records success/error, updates job status.
 - `app/services/orchestrator/registry.py` — loads `config/engines.yaml`, applies defaults, and produces the active engine registry with weights/timeouts.
 - `app/services/aggregator/` — normalize engine outputs, vote on verdicts, calculate severity/confidence, and infer malware families.
 - `app/services/engines/clamav|windows_defender|yara/` — individual engine runners and (for ClamAV) Dockerfile.
@@ -73,12 +73,18 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
   ```
 - **There is no need to touch the codebase to disable or reweight an engine—flip the YAML and restart.**
 
+### Parallel scanning behavior
+- Each scan spawns a Celery chord: one task per enabled engines in parallel, followed by a finalize task that aggregates results and sets the job status.
+- Per-engine timeouts are enforced from `config/engines.yaml`; timeouts/errors are recorded per engine without blocking others. Mixed success/error becomes `done_with_errors`; all errors become `error`.
+- Engine results are unique per `(job_id, engine)`; new deployments get this constraint automatically. Existing DB volumes created before this change need a one-time SQL:  
+  `ALTER TABLE engine_results ADD CONSTRAINT uq_engine_results_job_engine UNIQUE (job_id, engine);`
+
 ## API surface (v1)
 - `POST /api/v1/scan/` — multipart upload (`file` field). Returns `{job_id, status, cached, scanned_at?}`.
 - `GET /api/v1/results/{job_id}` — aggregated verdict, severity/confidence, families/categories, and `details` keyed by engine.
 
 ## Roadmap / still to build
-- Parallel or prioritized engine execution (today runs sequentially).
+- Engine prioritization / smart scheduling policies.
 - Pluggable object storage (e.g., MinIO/S3) instead of local `storage/files`.
 - Production-grade health monitoring, metrics, and structured logging across services.
 - Hardened retries/backoff per engine and clearer error surfacing.
