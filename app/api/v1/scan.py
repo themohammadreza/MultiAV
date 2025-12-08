@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.post("/")
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    sha256, path = await save_file(file)
+    sha256, location = await save_file(file)
 
     iran_tz = pytz.timezone('Asia/Tehran')
 
@@ -38,7 +38,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     # if it's a new file
     file_entry = FileModel(
         sha256 = sha256,
-        path = path,
+        path = location,
     )
     db.add(file_entry)
     db.commit()
@@ -50,7 +50,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     db.commit()
     db.refresh(job)
 
-    run_scan.delay(str(job.id), path)
+    run_scan.delay(str(job.id), location)
 
     return {"job_id": str(job.id),
             "status": "queued",

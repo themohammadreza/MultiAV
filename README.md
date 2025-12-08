@@ -14,8 +14,8 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
   - YARA rules compiled from `rules/yara`
   - Windows Defender via `malice/windows-defender`
 - **Aggregation (`app/services/aggregator/*`)**: normalizes engine payloads, applies weights, derives verdict/severity/confidence, and infers families/categories.
-- **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, filesystem storage at `storage/files/<sha256>/original` for uploaded binaries.
-- **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, and Windows Defender wired together with healthchecks and mounted config/storage.
+- **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, and pluggable storage backends. Use S3/MinIO object storage for uploaded binaries (default when running via `docker-compose`), or fallback to local filesystem in single-container dev setups.
+- **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, Windows Defender, and MinIO wired together with healthchecks. Config is still mounted read-only; file-sharing volumes are no longer required between API/worker.
 
 ## Project layout
 - `app/main.py` — FastAPI app factory and router wiring; creates DB schema on startup for local/dev.
@@ -25,11 +25,11 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - `app/services/orchestrator/registry.py` — loads `config/engines.yaml`, applies defaults, and produces the active engine registry with weights/timeouts.
 - `app/services/aggregator/` — normalize engine outputs, vote on verdicts, calculate severity/confidence, and infer malware families.
 - `app/services/engines/clamav|windows_defender|yara/` — individual engine runners and (for ClamAV) Dockerfile.
-- `app/services/storage.py` — saves uploads to `storage/files`, keyed by SHA-256 for cache hits.
-- `app/core/config.py` — environment-driven settings (DB/Redis/engine hosts, storage path).
+- `app/services/storage.py` — pluggable storage backend (S3/MinIO or local) that streams uploads and provides per-task temp copies.
+- `app/core/config.py` — environment-driven settings (DB/Redis/engine hosts, storage backend/object store config).
 - `app/db/models.py` & `app/db/session.py` — SQLAlchemy models and session/engine factory.
 - `config/engines.yaml` — enable/disable engines and tune weights/timeouts.
-- `docker-compose.yml` — local stack definition; mounts `./storage` and `./config` into app/worker.
+- `docker-compose.yml` — local stack definition; includes MinIO for object storage and mounts `./config` into app/worker.
 - `Dockerfile` — app image builder used by API and worker services.
 - `technical-docs.md` — deeper, lower-level technical notes.
 - `tests/` — starting point for automated coverage (extend here as you add features).

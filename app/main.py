@@ -1,15 +1,25 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from app.api.v1 import scan, results
+from fastapi import FastAPI
+
+from app.api.v1 import results, scan
+from app.services.storage import get_storage_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # starting the API
-    from app.db.session import Base, engine
     from app.db import models
+    from app.db.session import Base, SessionLocal, engine
 
     Base.metadata.create_all(bind=engine)
+
+    storage = get_storage_service()
+    if storage.backend == "s3":
+        db = SessionLocal()
+        try:
+            storage.migrate_local_files(db)
+        finally:
+            db.close()
     yield
 
 
