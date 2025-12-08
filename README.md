@@ -17,7 +17,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, filesystem storage at `storage/files/<sha256>/original` for uploaded binaries.
 - **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, and Windows Defender wired together with healthchecks and mounted config/storage.
 
-## Project layout (opinionated guide)
+## Project layout
 - `app/main.py` — FastAPI app factory and router wiring; creates DB schema on startup for local/dev.
 - `app/api/v1/scan.py` — upload endpoint; hashes file, caches by SHA-256, enqueues Celery job.
 - `app/api/v1/results.py` — fetch results by job UUID; returns aggregated summary + per-engine details.
