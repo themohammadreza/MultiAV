@@ -1,13 +1,13 @@
 engines:
   clamav:
     enabled: true
-    weight: 0.26
+    weight: 0.35
     timeout: 30
   yara:
     enabled: true
-    weight: 0.18
+    weight: 0.30
     timeout: 10
   windows-defender:
     enabled: true
-    weight: 0.34
+    weight: 0.35
     timeout: 120
