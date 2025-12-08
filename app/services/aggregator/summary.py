@@ -1,4 +1,7 @@
-from typing import Dict, List, Tuple
+from datetime import timezone
+from typing import Dict, List, Optional, Tuple
+
+import pytz
 
 from app.services.aggregator.confidence import weight_for_engine, weighted_confidence
 from app.services.aggregator.family_detection import detect_families
@@ -6,9 +9,19 @@ from app.services.aggregator.normalize import SEVERITY_SCORES
 from app.services.aggregator.voting import weighted_verdict
 from app.services.orchestrator.registry import get_active_engines, get_engine_weights
 
+IRAN_TZ = pytz.timezone("Asia/Tehran")
+
 
 def _closest_severity_label(score: float) -> str:
     return min(SEVERITY_SCORES.items(), key=lambda item: abs(item[1] - score))[0]
+
+
+def _to_iran_iso(dt) -> Optional[str]:
+    if not dt:
+        return None
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(IRAN_TZ).isoformat()
 
 
 def _aggregate_severity(results: List[Dict], engine_weights: Dict[str, float]) -> Tuple[str, float]:
@@ -41,6 +54,7 @@ def _serialize_engine_result(record) -> Dict:
     payload.setdefault("status", "ok" if record.status == "success" else "error")
     payload.setdefault("detected", False)
     payload.setdefault("confidence", 0.0)
+    payload["scanned_at"] = _to_iran_iso(record.scanned_at)
     return payload
 
 
@@ -57,8 +71,8 @@ def summarize_job(job, engine_results) -> Dict[str, object]:
             "severity": "informational",
             "severity_score": SEVERITY_SCORES["informational"],
             "engine_count": 0,
-            "started_at": job.created_at.isoformat() if job.created_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": _to_iran_iso(job.created_at),
+            "completed_at": _to_iran_iso(job.completed_at),
             "families": [],
             "primary_family": None,
             "categories": [],
@@ -84,8 +98,8 @@ def summarize_job(job, engine_results) -> Dict[str, object]:
         "severity": severity_label,
         "severity_score": round(severity_score, 3),
         "engine_count": len(results),
-        "started_at": job.created_at.isoformat() if job.created_at else None,
-        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "started_at": _to_iran_iso(job.created_at),
+        "completed_at": _to_iran_iso(job.completed_at),
         "families": families.get("families"),
         "primary_family": families.get("primary_family"),
         "categories": families.get("categories"),
