@@ -7,6 +7,10 @@ engines:
     enabled: true
     weight: 0.30
     timeout: 60
+  avast:
+    enabled: true
+    weight: 0.30
+    timeout: 120
   windows-defender:
     enabled: true
     weight: 0.35
