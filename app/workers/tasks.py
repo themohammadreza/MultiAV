@@ -34,6 +34,11 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
     storage = get_storage_service()
     status = "success"
 
+    file_on_disk = file_path or file_location
+    if not file_on_disk:
+        dispatcher.record_dispatch_error(job_id, "Engine task missing file location")
+        return {"job_id": job_id, "engine": engine_name, "status": "error"}
+
     try:
         local_path, cleanup = storage.ensure_local_copy(file_path)
         try:
@@ -110,7 +115,7 @@ def finalize_job(engine_task_results: List[dict], job_id: str) -> dict:
 
 
 @celery.task
-def run_scan(job_id: str, file_location: str):
+def run_scan(job_id: str, file_location: str, file_path: str | None = None):
     """Orchestrate a scan by fan-out to engine tasks and fan-in aggregation."""
     job = dispatcher.mark_job_status(job_id, "running...")
     if not job:
@@ -124,6 +129,8 @@ def run_scan(job_id: str, file_location: str):
         return {"job_id": job_id, "status": "error", "error": "no_engines"}
 
     engine_tasks = []
+    file_on_disk = file_path or file_location
+
     for name, definition in engine_registry.items():
         timeout = int(definition.get("timeout", DEFAULT_ENGINE_TIMEOUT) or DEFAULT_ENGINE_TIMEOUT)
         sig = run_engine_task.s(job_id=job_id, file_path=file_location, engine_name=name, timeout=timeout)

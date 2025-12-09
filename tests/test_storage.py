@@ -2,10 +2,12 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import boto3
 import pytest
-from botocore.exceptions import ClientError
-from moto import mock_s3
+
+botocore_exceptions = pytest.importorskip("botocore.exceptions")
+ClientError = botocore_exceptions.ClientError
+boto3 = pytest.importorskip("boto3")
+mock_s3 = pytest.importorskip("moto").mock_s3
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -26,33 +28,75 @@ def test_bucket_creation_skips_location_for_us_east_1(monkeypatch):
         def __init__(self):
             self.create_kwargs = None
 
+        def head_bucket(self, Bucket):  # noqa: N802
+            raise ClientError({"Error": {"Code": "404"}}, "HeadBucket")
+
+        def create_bucket(self, **kwargs):
+            self.create_kwargs = kwargs
+
+    monkeypatch.setenv("STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("STORAGE_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("STORAGE_S3_REGION", "us-east-1")
+    monkeypatch.setattr(storage.settings, "STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_BUCKET", "test-bucket")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_REGION", "us-east-1")
+
+    fake_client = FakeClient()
+
+    def mock_session(*args, **kwargs):
+        class MockSession:
+            def client(self, *a, **kw):
+                return fake_client
+
+        return MockSession()
+
+    monkeypatch.setattr("boto3.session.Session", mock_session)
+
+    storage_service = StorageService()
+
+    assert storage_service.bucket == "test-bucket"
+    assert "CreateBucketConfiguration" not in fake_client.create_kwargs
+
+
+def test_s3_client_uses_path_style(monkeypatch):
+    class FakeClient:
+        def __init__(self):
+            self.create_kwargs = None
+
         def head_bucket(self, Bucket):
             raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadBucket")
 
         def create_bucket(self, **kwargs):
             self.create_kwargs = kwargs
 
+    fake_client = FakeClient()
+    captured_kwargs = {}
+
+    def capture_client(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return fake_client
+
     class FakeSession:
         def __init__(self, *args, **kwargs):
             pass
 
         def client(self, *args, **kwargs):
-            return fake_client
-
-    fake_client = FakeClient()
+            return capture_client(*args, **kwargs)
 
     monkeypatch.setattr(storage.settings, "STORAGE_BACKEND", "s3")
     monkeypatch.setattr(storage.settings, "STORAGE_S3_BUCKET", "bucket")
     monkeypatch.setattr(storage.settings, "STORAGE_S3_REGION", "us-east-1")
     monkeypatch.setattr(storage.settings, "STORAGE_S3_ACCESS_KEY", "x")
     monkeypatch.setattr(storage.settings, "STORAGE_S3_SECRET_KEY", "y")
-    monkeypatch.setattr(storage.settings, "STORAGE_S3_ENDPOINT", None)
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_ENDPOINT", "http://minio:9000")
     monkeypatch.setattr(storage.settings, "STORAGE_S3_USE_SSL", False)
 
     monkeypatch.setattr(boto3, "session", type("S", (), {"Session": FakeSession}))
 
     StorageService()
-    assert fake_client.create_kwargs == {"Bucket": "bucket"}
+
+    assert isinstance(captured_kwargs.get("config"), Config)
+    assert captured_kwargs["config"].s3.get("addressing_style") == "path"
 
 
 def test_ensure_local_copy_falls_back_to_existing_local_file():
