@@ -19,14 +19,7 @@ PERSISTENCE_RETRY_DELAY = 2
 
 
 @celery.task(bind=True)
-def run_engine_task(
-    self,
-    job_id: str,
-    engine_name: str,
-    timeout: int,
-    file_location: str | None = None,
-    file_path: str | None = None,
-) -> dict:
+def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout: int) -> dict:
     """Execute a single AV engine in isolation and persist its result."""
     engine_registry = get_active_engines()
     definition = engine_registry.get(engine_name)
@@ -47,7 +40,7 @@ def run_engine_task(
         return {"job_id": job_id, "engine": engine_name, "status": "error"}
 
     try:
-        local_path, cleanup = storage.ensure_local_copy(file_on_disk)
+        local_path, cleanup = storage.ensure_local_copy(file_path)
         try:
             payload = runner(local_path)
         finally:
@@ -140,12 +133,7 @@ def run_scan(job_id: str, file_location: str, file_path: str | None = None):
 
     for name, definition in engine_registry.items():
         timeout = int(definition.get("timeout", DEFAULT_ENGINE_TIMEOUT) or DEFAULT_ENGINE_TIMEOUT)
-        sig = run_engine_task.s(
-            job_id=job_id,
-            file_location=file_on_disk,
-            engine_name=name,
-            timeout=timeout,
-        )
+        sig = run_engine_task.s(job_id=job_id, file_path=file_location, engine_name=name, timeout=timeout)
         sig = sig.set(soft_time_limit=timeout, time_limit=timeout + TIME_LIMIT_GRACE_SECONDS)
         engine_tasks.append(sig)
 
