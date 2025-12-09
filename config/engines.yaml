@@ -1,13 +1,11 @@
 engines:
   clamav:
-    enabled: true
+    enabled: false
     weight: 0.35
     timeout: 30
   yara:
     enabled: true
     weight: 0.30
-    # YARA rule compilation can be expensive on first run; allow a generous timeout
-    # so initialization completes without hitting Celery soft limits.
     timeout: 60
   windows-defender:
     enabled: true
