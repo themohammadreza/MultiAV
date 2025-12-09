@@ -6,7 +6,9 @@ engines:
   yara:
     enabled: true
     weight: 0.30
-    timeout: 10
+    # YARA rule compilation can be expensive on first run; allow a generous timeout
+    # so initialization completes without hitting Celery soft limits.
+    timeout: 60
   windows-defender:
     enabled: true
     weight: 0.35

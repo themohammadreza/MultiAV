@@ -87,6 +87,12 @@ def _parse_engine(name: str, raw_config: Any) -> Optional[EngineDefinition]:
     if not runner:
         return None
 
+    if isinstance(runner, _LazyEngineRunner):
+        loaded_runner = runner._load()
+        if not loaded_runner:
+            logger.warning("Engine %s unavailable because module failed to load", name)
+            return None
+
     config_block = raw_config if isinstance(raw_config, dict) else {}
     if not _as_bool(config_block.get("enabled", True)):
         return None
@@ -102,14 +108,14 @@ def _parse_engine(name: str, raw_config: Any) -> Optional[EngineDefinition]:
 
 
 def _default_registry() -> Dict[str, EngineDefinition]:
-    return {
-        name: {
-            "runner": runner,
-            "timeout": DEFAULT_ENGINE_TIMEOUT,
-            "weight": DEFAULT_ENGINE_WEIGHT,
-        }
-        for name, runner in AVAILABLE_ENGINES.items()
-    }
+    registry: Dict[str, EngineDefinition] = {}
+
+    for name in AVAILABLE_ENGINES:
+        parsed = _parse_engine(name, {})
+        if parsed:
+            registry[name] = parsed
+
+    return registry
 
 
 def get_active_engines(config_path: Optional[Union[str, Path]] = None) -> Dict[str, EngineDefinition]:
