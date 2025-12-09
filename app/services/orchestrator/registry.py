@@ -48,6 +48,7 @@ class EngineDefinition(TypedDict):
 
 AVAILABLE_ENGINES: Dict[str, EngineRunner] = {
     "clamav": _LazyEngineRunner("app.services.engines.clamav.engine"),
+    "avast": _LazyEngineRunner("app.services.engines.avast.engine"),
     "yara": _LazyEngineRunner("app.services.engines.yara.yara"),
     "windows-defender": _LazyEngineRunner("app.services.engines.windows_defender.engine"),
 }
