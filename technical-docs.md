@@ -53,6 +53,18 @@ The SQLAlchemy models in `app/db/models.py` define three core tables:
 - Configurable via `WINDEFENDER_HOST`, `WINDEFENDER_PORT`, and `WINDEFENDER_TIMEOUT` (defaults: `windows-defender`, `3993`, `120s`).
 - Docker Hub status checked 2024-10-16: repository is marked `active` (not deprecated); last published update was 2022-09-25.
 
+### Avast (options and recommendation)
+- **malice/avast**: implements the malice microservice contract with `POST /scan` (multipart field `malware`) on port `3993`, matching the interface already used for Windows Defender.
+  - Pros: drop-in HTTP compatibility with no wrapper code required.
+  - Cons: Docker Hub tags have not moved since 2018, making the engine and virus definitions stale; image bundles an older Avast for Linux build and does not auto-update signatures beyond what shipped in the image.
+- **Avast Core Security for Linux (official, wrapped)**: build a slim container around the vendor RPM/DEB plus a tiny FastAPI/uvicorn shim that proxies `POST /scan` to the `avast` CLI.
+  - Pros: current engine and definition stream, supported by Avast Business; wrapper lets us control timeouts and logging and keeps the HTTP contract identical to other engines (`/scan`, form field `malware`, 8080 recommended).
+  - Cons: requires supplying a license (activation code or `license.avastlic`), accepting the EULA, and running the vendor updater during image build/startup.
+
+**Recommended image**: ship our own wrapper image based on Avast Core Security for Linux (e.g., `multiav/avast-core:latest`) exposing `POST /scan` on port `8080` with form field `malware`. Add env vars `AVAST_EULA=accept` and either `AVAST_LICENSE_KEY=<activation_code>` or mount `/opt/avast/license.avastlic` to pass licensing. Persist `/var/lib/avast/defs` as a named volume so signature updates survive restarts; in air‑gapped environments, pre-bake the latest defs into the image and optionally bind-mount a read-only offline defs cache at the same path.
+
+**Definition updates**: run the vendor updater (`avast --update` or `avupdate` depending on the installed package) during container startup and on a daily cron within the container. For offline sites, point the updater at a staged mirror or copy the contents of `/var/lib/avast/defs` from a connected build host into the volume to avoid network egress.
+
 ## Configuration
 Default settings live in `app/core/config.py` and are overridden via environment variables. `docker-compose.yml` wires the defaults for local development (PostgreSQL, Redis, ClamAV, API, and worker containers) and mounts `./storage` into the app for persisted uploads.
 
