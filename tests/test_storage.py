@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 
 import boto3
 import pytest
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from moto import mock_s3
 from sqlalchemy import create_engine
@@ -53,6 +54,47 @@ def test_bucket_creation_skips_location_for_us_east_1(monkeypatch):
 
     StorageService()
     assert fake_client.create_kwargs == {"Bucket": "bucket"}
+
+
+def test_s3_client_uses_path_style(monkeypatch):
+    class FakeClient:
+        def __init__(self):
+            self.create_kwargs = None
+
+        def head_bucket(self, Bucket):
+            raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadBucket")
+
+        def create_bucket(self, **kwargs):
+            self.create_kwargs = kwargs
+
+    fake_client = FakeClient()
+    captured_kwargs = {}
+
+    def capture_client(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return fake_client
+
+    class FakeSession:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def client(self, *args, **kwargs):
+            return capture_client(*args, **kwargs)
+
+    monkeypatch.setattr(storage.settings, "STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_BUCKET", "bucket")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_REGION", "us-east-1")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_ACCESS_KEY", "x")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_SECRET_KEY", "y")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_ENDPOINT", "http://minio:9000")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_USE_SSL", False)
+
+    monkeypatch.setattr(boto3, "session", type("S", (), {"Session": FakeSession}))
+
+    StorageService()
+
+    assert isinstance(captured_kwargs.get("config"), Config)
+    assert captured_kwargs["config"].s3.get("addressing_style") == "path"
 
 
 def test_ensure_local_copy_falls_back_to_existing_local_file():
