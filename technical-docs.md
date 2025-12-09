@@ -44,6 +44,7 @@ The SQLAlchemy models in `app/db/models.py` define three core tables:
 
 ### YARA
 - Loads compiled rules from `rules/yara`. Prefers `index.yar` if present; otherwise compiles all `.yar`/`.yara` files, logging any compile failures.
+- Rule set is curated to keep startup clean: invalid ELF rules referencing `is__elf` (Mirai Okiru/Satori, Rebirth Vulcan, TinyShell, Torte, Mandibule) and the missing `MALW_Mirai.yar` include were removed after repeated load warnings. If logs show “Skipped N YARA files due to errors”, fix or delete those rules before shipping.
 - Matches produce rule, tags, and meta fields; returns normalized detections with match details and scan time. Family/category inference is handled centrally by the aggregator.
 
 ### Windows Defender (malice/windows-defender)

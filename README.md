@@ -11,7 +11,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, records per-engine results (one row per engine per job), updates job status, and returns aggregated summaries.
 - **Engines (`app/services/engines/*`)**:
   - ClamAV daemon (TCP or UNIX socket)
-  - YARA rules compiled from `rules/yara`
+  - YARA rules compiled from the curated set in `rules/yara` (startup logs list any skipped rule files that need pruning/fixes)
   - Windows Defender via `malice/windows-defender`
 - **Aggregation (`app/services/aggregator/*`)**: normalizes engine payloads, applies weights, derives verdict/severity/confidence, and infers families/categories.
 - **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, and pluggable storage backends. Use S3/MinIO object storage for uploaded binaries (default when running via `docker-compose`), or fallback to local filesystem in single-container dev setups.
@@ -64,7 +64,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
   engines:
     clamav:
       enabled: true
-      weight: 0.26
+      weight: 0.30
       timeout: 30
   ```
 - Restart the app/worker containers to pick up changes:
@@ -72,6 +72,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
   docker compose restart app worker
   ```
 - **There is no need to touch the codebase to disable or reweight an engine—flip the YAML and restart.**
+- If YARA logs “Skipped N YARA files due to errors”, remove or fix those rule files before running in production to keep compilation clean.
 
 ### Parallel scanning behavior
 - Each scan spawns a Celery chord: one task per enabled engines in parallel, followed by a finalize task that aggregates results and sets the job status.
