@@ -6,8 +6,15 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Callable, Optional, Tuple
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+except ImportError:  # pragma: no cover - fallback for environments without AWS deps
+    boto3 = None
+
+    class ClientError(Exception):
+        """Minimal stand-in used when botocore is unavailable."""
+
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -23,6 +30,8 @@ class StorageService:
         self.base_path = Path(settings.STORAGE_PATH)
 
         if self.backend == "s3":
+            if boto3 is None:
+                raise ImportError("boto3 is required for s3 storage backend")
             if not settings.STORAGE_S3_BUCKET:
                 raise ValueError("STORAGE_S3_BUCKET must be set when using S3 backend")
 
