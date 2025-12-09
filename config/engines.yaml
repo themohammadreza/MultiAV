@@ -1,6 +1,6 @@
 engines:
   clamav:
-    enabled: false
+    enabled: true
     weight: 0.35
     timeout: 30
   yara:
