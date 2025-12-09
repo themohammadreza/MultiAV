@@ -65,6 +65,11 @@ The SQLAlchemy models in `app/db/models.py` define three core tables:
 
 **Definition updates**: run the vendor updater (`avast --update` or `avupdate` depending on the installed package) during container startup and on a daily cron within the container. For offline sites, point the updater at a staged mirror or copy the contents of `/var/lib/avast/defs` from a connected build host into the volume to avoid network egress.
 
+**Operational/failure notes**:
+- Keep the Celery timeout for Avast generous (`timeout: 120` in `config/engines.yaml` by default) to absorb definition updates and the HTTP upload/scan cycle; the socket-based engines typically return faster.
+- If the license/EULA is missing or expired, the HTTP service returns 4xx/5xx and the orchestrator will record an engine error while other engines continue; surface these errors to operators so they can refresh the license or re-accept the EULA.
+- Stale definition volumes or failed updates lead to outdated detections; watch container logs for updater failures and ensure the defs volume has space and network reachability (or a valid offline mirror).
+
 ## Configuration
 Default settings live in `app/core/config.py` and are overridden via environment variables. `docker-compose.yml` wires the defaults for local development (PostgreSQL, Redis, ClamAV, API, and worker containers) and mounts `./storage` into the app for persisted uploads.
 
