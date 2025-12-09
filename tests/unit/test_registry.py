@@ -70,6 +70,31 @@ def test_get_active_engines_includes_avast_defaults():
 
 
 @pytest.mark.unit
+def test_get_active_engines_parses_avast_config_values(tmp_path):
+    """Avast remains enabled with stringified weights/timeouts in YAML."""
+
+    config_file = tmp_path / "engines.yaml"
+    config_file.write_text(
+        """
+engines:
+  avast:
+    enabled: true
+    weight: "0.42"
+    timeout: "45"
+  yara:
+    enabled: false
+"""
+    )
+
+    engines = registry.get_active_engines(config_path=config_file)
+
+    assert "avast" in engines
+    assert engines["avast"]["weight"] == pytest.approx(0.42)
+    assert engines["avast"]["timeout"] == 45
+    assert "yara" not in engines
+
+
+@pytest.mark.unit
 def test_get_active_engines_graceful_on_bad_yaml(tmp_path):
     """Malformed YAML shouldn't crash, should fall back to defaults"""
     bad_yaml = tmp_path / "bad.yaml"

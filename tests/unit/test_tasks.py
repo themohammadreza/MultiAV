@@ -88,3 +88,67 @@ def test_run_scan_fans_out_all_enabled_engines(monkeypatch):
     assert chord_calls["timeouts"] == [30, 120]
     assert chord_calls["callback"].name == "finalize"
     assert result["chord_id"] == "fake-chord-id"
+
+
+@pytest.mark.unit
+def test_run_engine_task_with_avast_runner(monkeypatch, tmp_path):
+    """Exercise the Avast runner inside the engine task orchestration."""
+
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(b"content")
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status_code = 200
+            self._payload = payload
+
+        def json(self):  # noqa: D401 - test helper
+            return self._payload
+
+        @property
+        def text(self):  # pragma: no cover - unused in happy path
+            return str(self._payload)
+
+    payload = {"avast": {"infected": False, "result": None, "version": "10.0"}}
+
+    from app.services.engines.avast import engine as avast_engine
+
+    monkeypatch.setattr(avast_engine.requests, "post", lambda url, files, timeout: FakeResponse(payload))
+
+    recorded = {}
+
+    def record_engine_result(job_id, engine_name, status, payload):  # noqa: ANN001
+        recorded.update({
+            "job_id": job_id,
+            "engine": engine_name,
+            "status": status,
+            "payload": payload,
+        })
+        return True
+
+    monkeypatch.setattr(tasks.dispatcher, "record_engine_result", record_engine_result)
+    monkeypatch.setattr(tasks.dispatcher, "record_dispatch_error", lambda *args, **kwargs: None)
+
+    class FakeStorage:
+        def ensure_local_copy(self, location):  # noqa: ANN001 - signature mirrors real storage
+            return location, lambda: None
+
+    monkeypatch.setattr(tasks, "get_storage_service", lambda: FakeStorage())
+    monkeypatch.setattr(
+        tasks,
+        "get_active_engines",
+        lambda: {"avast": {"runner": avast_engine.run, "timeout": 15, "weight": 0.3}},
+    )
+
+    result = tasks.run_engine_task.run(
+        job_id="job-avast",
+        file_path=str(sample),
+        engine_name="avast",
+        timeout=15,
+    )
+
+    assert result == {"job_id": "job-avast", "engine": "avast", "status": "success"}
+    assert recorded["status"] == "success"
+    assert recorded["payload"]["verdict"] == "clean"
+    assert recorded["payload"]["severity"] == "informational"
+    assert recorded["payload"]["confidence"] == 0.0
