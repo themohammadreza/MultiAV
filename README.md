@@ -11,6 +11,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, records per-engine results (one row per engine per job), updates job status, and returns aggregated summaries.
 - **Engines (`app/services/engines/*`)**:
   - ClamAV daemon (TCP or UNIX socket)
+  - Avast via `malice/avast` or an HTTP wrapper around Avast Core Security for Linux (configurable)
   - YARA rules compiled from the curated set in `rules/yara` (startup logs list any skipped rule files that need pruning/fixes)
   - Windows Defender via `malice/windows-defender`
 - **Aggregation (`app/services/aggregator/*`)**: normalizes engine payloads, applies weights, derives verdict/severity/confidence, and infers families/categories.
@@ -66,6 +67,10 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
       enabled: true
       weight: 0.30
       timeout: 30
+    avast:
+      enabled: true
+      weight: 0.30  # bump higher if you trust Avast more than other engines
+      timeout: 120  # longer while the daemon warms up and unpacks larger samples
   ```
 - Restart the app/worker containers to pick up changes:
   ```bash
@@ -77,7 +82,8 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 ### Parallel scanning behavior
 - Each scan spawns a Celery chord: one task per enabled engines in parallel, followed by a finalize task that aggregates results and sets the job status.
 - Per-engine timeouts are enforced from `config/engines.yaml`; timeouts/errors are recorded per engine without blocking others. Mixed success/error becomes `done_with_errors`; all errors become `error`.
-- Engine results are unique per `(job_id, engine)`; new deployments get this constraint automatically. Existing DB volumes created before this change need a one-time SQL:  
+- Avast runs over HTTP and can take longer to stream/upload samples than the socket-based ClamAV daemon; keep its timeout generous (default `120s`) to avoid aborting healthy scans while definitions update.
+- Engine results are unique per `(job_id, engine)`; new deployments get this constraint automatically. Existing DB volumes created before this change need a one-time SQL:
   `ALTER TABLE engine_results ADD CONSTRAINT uq_engine_results_job_engine UNIQUE (job_id, engine);`
 
 ## API surface (v1)

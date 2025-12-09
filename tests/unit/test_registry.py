@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.services.orchestrator import registry
@@ -54,6 +56,17 @@ engines:
     assert engines["clamav"]["weight"] == 0.5
     assert engines["clamav"]["timeout"] == 60
     assert "yara" not in engines  # Disabled
+
+
+@pytest.mark.unit
+def test_get_active_engines_includes_avast_defaults():
+    """Repository default config ships Avast with explicit timeout/weight."""
+
+    engines = registry.get_active_engines(config_path=Path("config/engines.yaml"))
+
+    assert "avast" in engines
+    assert engines["avast"]["timeout"] == 120
+    assert engines["avast"]["weight"] == pytest.approx(0.30)
 
 
 @pytest.mark.unit

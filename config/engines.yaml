@@ -9,8 +9,8 @@ engines:
     timeout: 60
   avast:
     enabled: true
-    weight: 0.30
-    timeout: 120
+    weight: 0.30  # HTTP scanner; tune higher if using fresh definitions
+    timeout: 120  # allow extra time for larger samples/engine warm-up
   windows-defender:
     enabled: true
     weight: 0.35
