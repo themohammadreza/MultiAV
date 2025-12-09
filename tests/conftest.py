@@ -43,12 +43,17 @@ def _stub_engine(name: str):
     return module
 
 
-for module_name in [
-    "app.services.engines.yara.yara",
+ENGINE_MODULES_TO_STUB = [
     "app.services.engines.clamav.engine",
-    "app.services.engines.windows_defender.engine",
-]:
-    if module_name not in sys.modules:
+]
+
+for module_name in ENGINE_MODULES_TO_STUB:
+    if module_name in sys.modules:
+        continue
+
+    try:
+        __import__(module_name)
+    except ImportError:
         sys.modules[module_name] = _stub_engine(module_name)
 
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db_path}")
