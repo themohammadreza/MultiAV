@@ -16,7 +16,7 @@ def test_save_and_retrieve_file(tmp_path):
     upload.file.write(content)
     upload.file.seek(0)
 
-    sha256, path = asyncio.get_event_loop().run_until_complete(storage.save_file(upload))
+    sha256, path = asyncio.run(storage.save_file(upload))
 
     assert Path(path).exists()
     assert Path(path).read_bytes() == content
@@ -25,7 +25,7 @@ def test_save_and_retrieve_file(tmp_path):
     upload2.file.write(content)
     upload2.file.seek(0)
 
-    sha256_2, path_2 = asyncio.get_event_loop().run_until_complete(storage.save_file(upload2))
+    sha256_2, path_2 = asyncio.run(storage.save_file(upload2))
 
     assert sha256 == sha256_2
     assert path == path_2
