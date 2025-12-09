@@ -69,8 +69,8 @@ def test_get_active_engines_graceful_on_bad_yaml(tmp_path):
 
 
 @pytest.mark.unit
-def test_lazy_engine_runner_warms_up_on_registry_load(monkeypatch):
-    """Lazy runners should be imported during registry parsing to avoid task timeouts."""
+def test_lazy_engine_runner_is_lazy_until_invoked(monkeypatch):
+    """Lazy runners should not be imported during registry parsing."""
 
     class RecordingLazy(registry._LazyEngineRunner):
         def __init__(self):
@@ -91,11 +91,15 @@ def test_lazy_engine_runner_warms_up_on_registry_load(monkeypatch):
     engines = registry.get_active_engines()
 
     assert "yara" in engines
+    assert runner.load_calls == 0  # no eager import
+
+    # Loading should happen only when the runner is actually invoked
+    engines["yara"]["runner"]("dummy-path")
     assert runner.load_calls == 1
 
 
 @pytest.mark.unit
-def test_lazy_engine_failure_removes_engine(monkeypatch):
+def test_lazy_engine_failure_surfaces_on_invocation(monkeypatch):
     class FailingLazy(registry._LazyEngineRunner):
         def _load(self):  # pragma: no cover - invoked indirectly
             return None
@@ -109,4 +113,6 @@ def test_lazy_engine_failure_removes_engine(monkeypatch):
 
     engines = registry.get_active_engines()
 
-    assert engines == {}
+    assert "missing" in engines
+    with pytest.raises(RuntimeError):
+        engines["missing"]["runner"]("dummy-path")

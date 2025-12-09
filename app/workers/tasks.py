@@ -34,13 +34,13 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
     storage = get_storage_service()
     status = "success"
 
-    file_on_disk = file_path or file_location
+    file_on_disk = file_path
     if not file_on_disk:
         dispatcher.record_dispatch_error(job_id, "Engine task missing file location")
         return {"job_id": job_id, "engine": engine_name, "status": "error"}
 
     try:
-        local_path, cleanup = storage.ensure_local_copy(file_path)
+        local_path, cleanup = storage.ensure_local_copy(file_on_disk)
         try:
             payload = runner(local_path)
         finally:

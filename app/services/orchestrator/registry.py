@@ -87,12 +87,6 @@ def _parse_engine(name: str, raw_config: Any) -> Optional[EngineDefinition]:
     if not runner:
         return None
 
-    if isinstance(runner, _LazyEngineRunner):
-        loaded_runner = runner._load()
-        if not loaded_runner:
-            logger.warning("Engine %s unavailable because module failed to load", name)
-            return None
-
     config_block = raw_config if isinstance(raw_config, dict) else {}
     if not _as_bool(config_block.get("enabled", True)):
         return None
