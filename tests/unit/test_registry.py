@@ -66,3 +66,47 @@ def test_get_active_engines_graceful_on_bad_yaml(tmp_path):
 
     # Should return defaults instead of crashing
     assert len(engines) > 0
+
+
+@pytest.mark.unit
+def test_lazy_engine_runner_warms_up_on_registry_load(monkeypatch):
+    """Lazy runners should be imported during registry parsing to avoid task timeouts."""
+
+    class RecordingLazy(registry._LazyEngineRunner):
+        def __init__(self):
+            super().__init__("app.services.engines.yara.yara")
+            self.load_calls = 0
+
+        def _load(self):
+            self.load_calls += 1
+            return lambda path: {"status": "ok"}
+
+    runner = RecordingLazy()
+
+    monkeypatch.setattr(registry, "AVAILABLE_ENGINES", {"yara": runner})
+    monkeypatch.setattr(
+        registry, "load_engine_config", lambda path=None: {"engines": {"yara": {"enabled": True}}}
+    )
+
+    engines = registry.get_active_engines()
+
+    assert "yara" in engines
+    assert runner.load_calls == 1
+
+
+@pytest.mark.unit
+def test_lazy_engine_failure_removes_engine(monkeypatch):
+    class FailingLazy(registry._LazyEngineRunner):
+        def _load(self):  # pragma: no cover - invoked indirectly
+            return None
+
+    runner = FailingLazy("app.missing.module")
+
+    monkeypatch.setattr(registry, "AVAILABLE_ENGINES", {"missing": runner})
+    monkeypatch.setattr(
+        registry, "load_engine_config", lambda path=None: {"engines": {"missing": {"enabled": True}}}
+    )
+
+    engines = registry.get_active_engines()
+
+    assert engines == {}
