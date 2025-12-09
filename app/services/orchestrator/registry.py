@@ -1,13 +1,41 @@
+import importlib
 import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypedDict, Union
 
-from app.services.engines.clamav.engine import run as clamav_run
-from app.services.engines.windows_defender.engine import run as windows_defender_run
-from app.services.engines.yara.yara import run as yara_run
 from app.services.orchestrator.loader import EngineConfigError, load_engine_config
 
 EngineRunner = Callable[[str], dict]
+
+
+class _LazyEngineRunner:
+    """Delay importing engine modules until the runner is invoked."""
+
+    def __init__(self, module_path: str, attr: str = "run") -> None:
+        self.module_path = module_path
+        self.attr = attr
+        self._runner: Optional[EngineRunner] = None
+
+    def _load(self) -> Optional[EngineRunner]:
+        if self._runner:
+            return self._runner
+
+        try:
+            module = importlib.import_module(self.module_path)
+        except ImportError:
+            logger.warning("Engine module %s could not be imported", self.module_path)
+            return None
+
+        self._runner = getattr(module, self.attr, None)
+        if not self._runner:
+            logger.warning("Engine module %s missing %s callable", self.module_path, self.attr)
+        return self._runner
+
+    def __call__(self, file_path: str) -> dict:
+        runner = self._load()
+        if not runner:
+            raise RuntimeError(f"Engine runner unavailable for {self.module_path}")
+        return runner(file_path)
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +47,9 @@ class EngineDefinition(TypedDict):
 
 
 AVAILABLE_ENGINES: Dict[str, EngineRunner] = {
-    "clamav": clamav_run,
-    "yara": yara_run,
-    "windows-defender": windows_defender_run,
+    "clamav": _LazyEngineRunner("app.services.engines.clamav.engine"),
+    "yara": _LazyEngineRunner("app.services.engines.yara.yara"),
+    "windows-defender": _LazyEngineRunner("app.services.engines.windows_defender.engine"),
 }
 
 DEFAULT_ENGINE_TIMEOUT = 120

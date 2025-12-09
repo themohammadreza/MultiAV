@@ -1,6 +1,10 @@
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+try:
+    from pydantic import BaseModel, Field, ConfigDict
+except ImportError:  # pragma: no cover - compatibility for older Pydantic
+    from pydantic import BaseModel, Field  # type: ignore
+    ConfigDict = None  # type: ignore
 
 SEVERITY_LEVELS = ["informational", "low", "medium", "high", "critical"]
 SEVERITY_SCORES = {
@@ -32,8 +36,11 @@ class EngineResultModel(BaseModel):
     raw: Optional[Any] = None
     error: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+    if ConfigDict:
+        model_config = ConfigDict(extra="allow")
+    else:  # pragma: no cover - Pydantic v1 fallback
+        class Config:  # type: ignore[misc]
+            extra = "allow"
 
 
 def _normalize_severity(severity: Optional[str]) -> str:

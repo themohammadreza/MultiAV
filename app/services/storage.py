@@ -8,12 +8,16 @@ from typing import Callable, Optional, Tuple
 
 try:
     import boto3
+    from botocore.config import Config
     from botocore.exceptions import ClientError
 except ImportError:  # pragma: no cover - fallback for environments without AWS deps
     boto3 = None
 
     class ClientError(Exception):
         """Minimal stand-in used when botocore is unavailable."""
+
+    class Config:  # type: ignore[override]
+        """Placeholder so references remain resolvable when botocore is absent."""
 
 from fastapi import UploadFile
 
