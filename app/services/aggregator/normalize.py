@@ -73,6 +73,8 @@ def normalize_engine_result(
     normalized_severity = _normalize_severity(severity)
     severity_score = SEVERITY_SCORES[normalized_severity]
 
+    normalized_detected = bool(detected) if detected is not None else False
+
     normalized_status = (status or "ok").lower()
     if error:
         normalized_status = "error"
@@ -84,7 +86,7 @@ def normalize_engine_result(
     if normalized_status == "error":
         normalized_verdict = "error"
     else:
-        inferred_verdict = "malicious" if detected else "clean"
+        inferred_verdict = "malicious" if normalized_detected else "clean"
         normalized_verdict = (verdict or inferred_verdict).lower()
         if normalized_verdict not in VERDICTS:
             normalized_verdict = inferred_verdict
@@ -94,7 +96,7 @@ def normalize_engine_result(
         engine_version=engine_version,
         engine_type=engine_type,
         status=normalized_status,
-        detected=detected,
+        detected=normalized_detected,
         verdict=normalized_verdict,
         severity=normalized_severity,
         severity_score=severity_score,
