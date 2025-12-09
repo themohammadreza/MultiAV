@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 from typing import Callable, Optional, Tuple
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import UploadFile
 
@@ -35,6 +36,13 @@ class StorageService:
                 "s3",
                 endpoint_url=settings.STORAGE_S3_ENDPOINT,
                 use_ssl=settings.STORAGE_S3_USE_SSL,
+                config=Config(
+                    s3={
+                        # Ensure compatibility with MinIO and other S3-compatible
+                        # providers that do not support virtual-hosted style.
+                        "addressing_style": "path",
+                    }
+                ),
             )
             self.bucket = settings.STORAGE_S3_BUCKET
             self._ensure_bucket()
