@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Callable, Optional, Tuple
 from datetime import datetime, timezone
+import threading
 
 try:
     import boto3
@@ -36,6 +37,7 @@ class StorageService:
         self.base_path = Path(settings.STORAGE_PATH)
         self.object_ttl_seconds = settings.STORAGE_TTL_SECONDS
         self.max_bucket_bytes = settings.STORAGE_MAX_BYTES
+        self._cleanup_timer: Optional[threading.Timer] = None
 
         if self.backend == "s3":
             if boto3 is None:
@@ -113,6 +115,7 @@ class StorageService:
                 self._client.upload_fileobj(temp, self.bucket, key, ExtraArgs=extra_args)
                 location = key
                 self._cleanup_bucket()
+                self._schedule_ttl_cleanup()
             else:
                 dir_path = self.base_path / digest
                 dir_path.mkdir(parents=True, exist_ok=True)
@@ -228,6 +231,8 @@ class StorageService:
                     size = int(obj.get("Size", 0))
                     if not key or not last_modified:
                         continue
+                    if isinstance(last_modified, datetime) and last_modified.tzinfo is None:
+                        last_modified = last_modified.replace(tzinfo=timezone.utc)
                     objects.append((key, size, last_modified))
                     total_size += size
 
@@ -260,6 +265,8 @@ class StorageService:
                 self._delete_objects(list(keys_to_delete))
         except Exception as exc:  # noqa: BLE001 - cleanup should not break uploads
             logger.warning("Skipping S3 cleanup due to error: %s", exc)
+        finally:
+            self._cleanup_timer = None
 
     def _delete_objects(self, keys: list[str]) -> None:
         for idx in range(0, len(keys), DELETE_BATCH_SIZE):
@@ -271,6 +278,20 @@ class StorageService:
                 )
             except ClientError as exc:
                 logger.warning("Failed to delete objects %s: %s", batch, exc)
+
+    def _schedule_ttl_cleanup(self) -> None:
+        """Best-effort background cleanup after TTL passes, even if no new uploads arrive."""
+        if self.backend != "s3":
+            return
+        if self._cleanup_timer and self._cleanup_timer.is_alive():
+            return
+        try:
+            timer = threading.Timer(self.object_ttl_seconds, self._cleanup_bucket)
+            timer.daemon = True
+            timer.start()
+            self._cleanup_timer = timer
+        except Exception as exc:  # noqa: BLE001 - do not fail uploads on scheduler issues
+            logger.warning("Failed to schedule TTL cleanup: %s", exc)
 
 
 _storage_service: Optional[StorageService] = None
