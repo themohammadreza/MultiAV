@@ -27,6 +27,6 @@ celery.conf.update(
 from app.workers import tasks
 
 def create_celery_app():
-    """Return the configured Celery instance (useful for FastAPI integration/tests)."""
+    """Return the configured Celery instance"""
     return celery
 

@@ -43,3 +43,16 @@ def test_detect_families_extracts_primary_and_categories():
     assert "trojan" in families["families"]
     assert "fake" in families["categories"]
     assert len(families["signatures"]) == 3
+
+
+@pytest.mark.unit
+def test_detect_families_preserves_category_order():
+    results = [
+        {"engine": "engine-a", "signature": "malware.email.phishing"},
+        {"engine": "engine-b", "signature": "trojan.loader.variant"},
+        {"engine": "engine-c", "signature": "worm.autorun.sample"},
+    ]
+
+    families = family_detection.detect_families(results)
+
+    assert families["categories"] == ["email", "loader", "autorun"]

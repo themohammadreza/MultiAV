@@ -22,6 +22,7 @@ def detect_families(results: List[Dict]) -> Dict[str, object]:
     """Aggregate family/category signals across engine signatures."""
     family_counter: Counter = Counter()
     category_counter: Counter = Counter()
+    ordered_categories: List[str] = []
     signatures = []
 
     for result in results:
@@ -36,13 +37,15 @@ def detect_families(results: List[Dict]) -> Dict[str, object]:
             family_counter[family] += 1
         if category:
             category_counter[category] += 1
+            if category not in ordered_categories:
+                # Preserve first-seen order so categories align with signature listing
+                ordered_categories.append(category)
 
     primary_family = family_counter.most_common(1)[0][0] if family_counter else None
 
     return {
         "primary_family": primary_family,
         "families": sorted(family_counter.keys()),
-        "categories": sorted(category_counter.keys()),
+        "categories": ordered_categories,
         "signatures": signatures,
     }
-
