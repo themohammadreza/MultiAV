@@ -123,7 +123,7 @@ services:
     image: multiav-app:latest
     container_name: multiav-worker
     working_dir: /app
-    command: ["celery", "-A", "app.workers.celery_app:celery", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "app.workers.celery_app:celery", "worker", "--loglevel=info", "--pool=threads", "--concurrency=4", "--prefetch-multiplier=1", "--max-tasks-per-child=0"]
     environment:
       DATABASE_URL: postgresql://multiav_user:mohammad@postgres:5432/multiav_db
       REDIS_URL: redis://redis:6379/0
