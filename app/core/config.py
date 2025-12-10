@@ -15,6 +15,8 @@ class Settings:
         "no",
         "off",
     }
+    STORAGE_TTL_SECONDS: int = int(os.getenv("STORAGE_TTL_SECONDS", "180"))
+    STORAGE_MAX_BYTES: int = int(os.getenv("STORAGE_MAX_BYTES", str(5 * 1024 * 1024)))
 
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

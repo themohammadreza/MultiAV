@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Callable, Optional, Tuple
+from datetime import datetime, timezone
 
 try:
     import boto3
@@ -26,12 +27,15 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 1024 * 1024
+DELETE_BATCH_SIZE = 1000
 
 
 class StorageService:
     def __init__(self) -> None:
         self.backend = settings.STORAGE_BACKEND
         self.base_path = Path(settings.STORAGE_PATH)
+        self.object_ttl_seconds = settings.STORAGE_TTL_SECONDS
+        self.max_bucket_bytes = settings.STORAGE_MAX_BYTES
 
         if self.backend == "s3":
             if boto3 is None:
@@ -108,6 +112,7 @@ class StorageService:
                     extra_args["ContentType"] = upload.content_type
                 self._client.upload_fileobj(temp, self.bucket, key, ExtraArgs=extra_args)
                 location = key
+                self._cleanup_bucket()
             else:
                 dir_path = self.base_path / digest
                 dir_path.mkdir(parents=True, exist_ok=True)
@@ -205,6 +210,67 @@ class StorageService:
             return True
         except ClientError:
             return False
+
+    def _cleanup_bucket(self) -> None:
+        """Delete objects older than TTL or when total size exceeds max_bytes."""
+        if self.backend != "s3":
+            return
+
+        try:
+            paginator = self._client.get_paginator("list_objects_v2")
+            objects = []
+            total_size = 0
+
+            for page in paginator.paginate(Bucket=self.bucket):
+                for obj in page.get("Contents", []):
+                    key = obj.get("Key")
+                    last_modified = obj.get("LastModified")
+                    size = int(obj.get("Size", 0))
+                    if not key or not last_modified:
+                        continue
+                    objects.append((key, size, last_modified))
+                    total_size += size
+
+            if not objects:
+                return
+
+            now = datetime.now(timezone.utc)
+            keys_to_delete = set()
+
+            for key, size, last_modified in objects:
+                try:
+                    age_seconds = (now - last_modified).total_seconds()
+                except Exception:
+                    continue
+                if age_seconds >= self.object_ttl_seconds:
+                    keys_to_delete.add(key)
+
+            if total_size > self.max_bucket_bytes:
+                remaining_size = total_size
+                for key, size, last_modified in sorted(objects, key=lambda item: item[2]):
+                    if remaining_size <= self.max_bucket_bytes:
+                        break
+                    if key in keys_to_delete:
+                        remaining_size -= size
+                        continue
+                    keys_to_delete.add(key)
+                    remaining_size -= size
+
+            if keys_to_delete:
+                self._delete_objects(list(keys_to_delete))
+        except Exception as exc:  # noqa: BLE001 - cleanup should not break uploads
+            logger.warning("Skipping S3 cleanup due to error: %s", exc)
+
+    def _delete_objects(self, keys: list[str]) -> None:
+        for idx in range(0, len(keys), DELETE_BATCH_SIZE):
+            batch = keys[idx : idx + DELETE_BATCH_SIZE]
+            try:
+                self._client.delete_objects(
+                    Bucket=self.bucket,
+                    Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+                )
+            except ClientError as exc:
+                logger.warning("Failed to delete objects %s: %s", batch, exc)
 
 
 _storage_service: Optional[StorageService] = None
