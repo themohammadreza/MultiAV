@@ -96,7 +96,15 @@ def render_summary(summary: Dict[str, object]) -> None:
     )
     st.write("Primary family:", summary.get("primary_family") or "—")
     st.write("Categories:", ", ".join(summary.get("categories") or []) or "—")
-    st.write("Signatures:", ", ".join(summary.get("signatures") or []) or "—")
+
+    signatures = summary.get("signatures") or []
+    rendered_signatures = []
+    for sig in signatures:
+        if isinstance(sig, dict):
+            rendered_signatures.append(sig.get("signature") or sig.get("rule") or "")
+        else:
+            rendered_signatures.append(str(sig))
+    st.write("Signatures:", ", ".join(filter(None, rendered_signatures)) or "—")
 
     details = summary.get("details") or {}
     if details:
