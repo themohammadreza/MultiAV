@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import cast, String
 
 from app.db.models import File, ScanJob
 from app.db.session import get_db
@@ -33,7 +34,7 @@ def list_recent_jobs(
     if sha256:
         query = query.filter(File.sha256.ilike(f"%{sha256}%"))
     if job_id:
-        query = query.filter(ScanJob.id == job_id)
+        query = query.filter(cast(ScanJob.id, String).ilike(f"%{job_id}%"))
 
     jobs: List[ScanJob] = query.limit(limit).all()
 

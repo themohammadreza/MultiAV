@@ -51,7 +51,8 @@ def test_recent_jobs_filters_by_severity_and_job():
             job.results[0].result["severity"] = "high"
             session.commit()
 
-    response = client.get(f"/api/v1/ui/jobs/recent?severity=high&job_id={job_id}")
+    # Partial job id filter should work without UUID casting errors
+    response = client.get(f"/api/v1/ui/jobs/recent?severity=high&job_id={job_id[:4]}")
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) == 1
