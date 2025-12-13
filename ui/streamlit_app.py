@@ -193,10 +193,14 @@ def results_view(config: UIConfig) -> None:
 
     client = get_client(config)
     try:
-        summary = client.poll_results(job_id, timeout=config.request_timeout)
+        summary = client.get_results(job_id)
     except Exception as exc:  # pragma: no cover - Streamlit surfacing
         st.error(f"Could not fetch results: {exc}")
         return
+
+    if not MultiAVClient.is_terminal(summary.get("status")):
+        st.caption("Still processing. Refreshing automatically until the job finishes…")
+        st.autorefresh(interval=int(config.poll_interval * 1000), key="results_poll")
 
     render_summary(summary)
 
