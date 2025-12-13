@@ -76,6 +76,7 @@ def render_engine_table(details: Dict[str, Dict]) -> List[Dict[str, object]]:
                 "signature": payload.get("signature") or payload.get("rule"),
                 "severity": payload.get("severity"),
                 "confidence": payload.get("confidence"),
+                # Prefer duration_ms, but show any duration we got from the engine.
                 "duration_ms": payload.get("duration_ms") or payload.get("duration"),
                 "error": payload.get("error") or payload.get("message"),
             }
@@ -97,6 +98,7 @@ def render_summary(summary: Dict[str, object]) -> None:
     st.write("Primary family:", summary.get("primary_family") or "—")
     st.write("Categories:", ", ".join(summary.get("categories") or []) or "—")
 
+    # API may send signatures as dicts; flatten to readable strings.
     signatures = summary.get("signatures") or []
     rendered_signatures = []
     for sig in signatures:
@@ -199,6 +201,7 @@ def results_view(config: UIConfig) -> None:
         return
 
     if not MultiAVClient.is_terminal(summary.get("status")):
+        # Keep this tab refreshing so users don't sit on a stale partial summary.
         st.caption("Still processing. Refreshing automatically until the job finishes…")
         st.autorefresh(interval=int(config.poll_interval * 1000), key="results_poll")
 
