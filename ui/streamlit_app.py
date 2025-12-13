@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from pathlib import Path
+from uuid import UUID
 
 import streamlit as st
 
@@ -42,6 +43,59 @@ def _safe_autorefresh(interval_seconds: float, key: str) -> None:
             f"<meta http-equiv='refresh' content='{interval_seconds}'>",
             unsafe_allow_html=True,
         )
+
+
+def _save_job_id(job_id: str) -> None:
+    """Persist the latest job_id in session (and URL) so refreshes can restore it."""
+    if not job_id:
+        return
+    try:
+        # Enforce valid UUID to avoid hammering the API with bad IDs.
+        job_id = str(UUID(str(job_id)))
+    except Exception:
+        st.session_state.pop("job_id", None)
+        return
+
+    st.session_state["job_id"] = job_id
+    recent = st.session_state.get("recent_job_ids") or []
+    if job_id not in recent:
+        recent = [job_id] + recent
+    st.session_state["recent_job_ids"] = recent[:20]
+    try:
+        if hasattr(st, "query_params"):
+            st.query_params["job_id"] = job_id
+        else:
+            st.experimental_set_query_params(job_id=job_id)
+    except Exception:
+        # Older Streamlit versions may not support query params; ignore quietly.
+        pass
+
+
+def render_status_or_results(config: UIConfig, job_id: str) -> None:
+    """Shared renderer to show current status/results for a job id."""
+    try:
+        job_id = str(UUID(str(job_id)))
+    except Exception:
+        st.warning("Job ID is not a valid UUID. Load a valid job to view details.")
+        return
+
+    client = get_client(config)
+    try:
+        summary = client.get_results(job_id)
+    except Exception as exc:  # pragma: no cover - Streamlit surfacing
+        st.error(f"Could not fetch status for {job_id}: {exc}")
+        return
+
+    st.write(f"Job: {job_id}")
+    st.write(f"Status: {readable_status(summary.get('status'))}")
+    if not MultiAVClient.is_terminal(summary.get("status")):
+        st.caption("Polling…")
+        _safe_autorefresh(config.poll_interval, key=f"inline_poll_{job_id}")
+        details = summary.get("details") or {}
+        if details:
+            st.table(render_engine_table(details))
+    else:
+        render_summary(summary)
 
 
 def load_ui_config() -> UIConfig:
@@ -170,11 +224,19 @@ def upload_view(config: UIConfig) -> None:
             st.error(f"Upload failed: {exc}")
             return
 
-        st.session_state["job_id"] = response.get("job_id")
+        _save_job_id(response.get("job_id"))
         st.session_state["last_file_bytes"] = upload_bytes
         st.session_state["last_file_name"] = uploaded.name
         st.session_state["cached"] = response.get("cached", False)
         st.success(f"Job {response.get('job_id')} submitted. Cached={response.get('cached')}")
+        st.session_state["show_inline_results"] = True
+        st.session_state["switch_to_results"] = True
+
+    # After an upload, render a live preview so users don't lose track on rerun.
+    if st.session_state.get("show_inline_results") and st.session_state.get("job_id"):
+        st.divider()
+        st.subheader("Latest job status")
+        render_status_or_results(config, st.session_state["job_id"])
 
 
 def status_view(config: UIConfig) -> None:
@@ -182,6 +244,12 @@ def status_view(config: UIConfig) -> None:
     job_id = st.session_state.get("job_id")
     if not job_id:
         st.info("Upload a file to start tracking a scan job.")
+        return
+
+    try:
+        job_id = str(UUID(str(job_id)))
+    except Exception:
+        st.warning("Job ID is not a valid UUID. Load a valid job to view status.")
         return
 
     client = get_client(config)
@@ -212,18 +280,31 @@ def results_view(config: UIConfig) -> None:
     st.header("Results")
     client = get_client(config)
 
+    # Load job_id from URL if present (restores after browser refresh)
+    if "job_id" not in st.session_state:
+        try:
+            params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
+            if params.get("job_id"):
+                _save_job_id(params.get("job_id")[0])
+        except Exception:
+            pass
+
     default_job = st.session_state.get("job_id", "")
     job_input = st.text_input("Job ID", value=default_job)
     sha_lookup = st.text_input("Lookup by SHA256 (uses most recent match)", value="")
 
     if st.button("Load job"):
         if job_input:
-            st.session_state["job_id"] = job_input.strip()
+            try:
+                _save_job_id(job_input.strip())
+            except Exception:
+                st.warning("Invalid job ID format. Please paste a full UUID.")
+                return
         elif sha_lookup:
             try:
                 matches = client.list_recent_jobs(sha256=sha_lookup.strip(), limit=1)
                 if matches:
-                    st.session_state["job_id"] = matches[0]["job_id"]
+                    _save_job_id(matches[0]["job_id"])
                     st.success(f"Loaded job {matches[0]['job_id']} from SHA256 search.")
                 else:
                     st.warning("No jobs found for that SHA256.")
@@ -237,9 +318,15 @@ def results_view(config: UIConfig) -> None:
         return
 
     try:
+        job_id = str(UUID(str(job_id)))
+    except Exception:
+        st.warning("Job ID is not a valid UUID. Load a valid job to view results.")
+        return
+
+    try:
         summary = client.get_results(job_id)
     except Exception as exc:  # pragma: no cover - Streamlit surfacing
-        st.error(f"Could not fetch results: {exc}")
+        st.error(f"Could not fetch results for {job_id}: {exc}")
         return
 
     if not MultiAVClient.is_terminal(summary.get("status")):
@@ -263,7 +350,6 @@ def history_view(config: UIConfig) -> None:
         index=0,
     )
     hash_filter = st.text_input("SHA256 contains")
-    job_filter = st.text_input("Job ID contains")
 
     client = get_client(config)
     try:
@@ -271,7 +357,7 @@ def history_view(config: UIConfig) -> None:
             status=status_filter or None,
             severity=severity_filter or None,
             sha256=hash_filter or None,
-            job_id=job_filter or None,
+            job_id=None,
         )
     except Exception as exc:  # pragma: no cover - Streamlit surfacing
         st.error(f"Could not load job history: {exc}")
@@ -281,13 +367,16 @@ def history_view(config: UIConfig) -> None:
         st.info("No jobs to display yet.")
         return
 
-    st.dataframe(jobs, hide_index=True)
+    feed_job_ids = [item["job_id"] for item in jobs if item.get("job_id")]
+    recent_job_ids = st.session_state.get("recent_job_ids") or []
+    merged_job_ids = list(dict.fromkeys(feed_job_ids + recent_job_ids))
 
-    job_options = [item["job_id"] for item in jobs if item.get("job_id")]
-    selected_job = st.selectbox("Jump to job_id", options=[""] + job_options, index=0)
+    selected_job = st.selectbox("Jump to job_id", options=[""] + merged_job_ids, index=0)
     if selected_job:
-        st.session_state["job_id"] = selected_job
+        _save_job_id(selected_job)
         st.success(f"Loaded job {selected_job} for viewing. Check the Results tab.")
+
+    st.dataframe(jobs, hide_index=True)
 
     if st.session_state.get("last_file_bytes") and st.button("Re-run last upload"):
         try:
