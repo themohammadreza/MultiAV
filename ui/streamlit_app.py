@@ -36,16 +36,19 @@ def _as_bool(value: object) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on", "y"}
 
 
-def _safe_autorefresh(interval_seconds: float, key: str) -> None:
-    """Trigger periodic reruns using Streamlit's controlled rerun to preserve state."""
-    refresh_key = f"_last_refresh_{key}"
-    last = st.session_state.get(refresh_key, 0)
-    now = time.time()
+def _poll_if_needed(config: UIConfig, job_id: str) -> None:
+    """Background polling for non-terminal jobs across all tabs."""
+    if not job_id:
+        return
     
-    if now - last >= interval_seconds:
-        st.session_state[refresh_key] = now
-        time.sleep(0.1)  # Small delay before rerun
-        st.rerun()
+    client = get_client(config)
+    try:
+        summary = client.get_results(job_id)
+        if not MultiAVClient.is_terminal(summary.get("status")):
+            time.sleep(config.poll_interval)
+            st.rerun()
+    except Exception:
+        pass
 
 
 def _save_job_id(job_id: str) -> None:
@@ -108,7 +111,7 @@ def render_status_or_results(config: UIConfig, job_id: str, auto_refresh: bool =
         if details:
             st.table(render_engine_table(details))
         if auto_refresh:
-            _safe_autorefresh(config.poll_interval, key=f"inline_poll_{job_id}")
+            _poll_if_needed(config, job_id)
     else:
         render_summary(summary)
 
@@ -257,7 +260,9 @@ def upload_view(config: UIConfig) -> None:
         st.write("Enabled engines")
         st.table(engines)
 
-    uploaded = st.file_uploader("Choose a file", type=None)
+    # Use stable key to prevent uploader reset
+    upload_key = f"uploader_{st.session_state.get('job_id', 'default')}"
+    uploaded = st.file_uploader("Choose a file", type=None, key=upload_key)
     if not uploaded:
         return
 
@@ -274,10 +279,10 @@ def upload_view(config: UIConfig) -> None:
             st.error(f"Upload failed: {exc}")
             return
 
-        job_id = response.get("job_id")
-        cached = response.get("cached", False)
-        
-        _save_job_id(job_id)
+        _save_job_id(response.get("job_id"))
+        st.session_state["last_file_bytes"] = upload_bytes
+        st.session_state["last_file_name"] = uploaded.name
+        st.session_state["cached"] = response.get("cached", False)
         
         # Store upload in history queue (max 5 recent uploads)
         if "upload_history" not in st.session_state:
@@ -286,19 +291,24 @@ def upload_view(config: UIConfig) -> None:
         st.session_state["upload_history"].appendleft({
             "bytes": upload_bytes,
             "name": uploaded.name,
-            "job_id": job_id,
-            "cached": cached,
+            "job_id": response.get("job_id"),
+            "cached": response.get("cached", False),
         })
         
-        st.success(f"✅ Job `{job_id}` submitted. Cached: {cached}")
-        
-        if cached:
-            st.info("📋 This file was scanned before. Navigate to **Results** tab to view cached results.")
+        # Different messages for cached vs new
+        if response.get("cached"):
+            st.success(f"✅ Job `{response.get('job_id')}` submitted. Cached: True 📋 This file was scanned before. Navigate to Results tab to view cached results.")
         else:
-            st.info("🔄 Scan in progress. Navigate to **Results** or **Status** tab to monitor progress.")
+            st.success(f"✅ Job `{response.get('job_id')}` submitted. Cached: False")
         
-        # Don't auto-refresh inline - let user navigate to Results/Status tabs
-        # This prevents the annoying page refresh that clears the success message
+        st.session_state["show_inline_results"] = True
+        st.rerun()  # Force controlled rerun to persist message
+
+    # Show live preview after upload
+    if st.session_state.get("show_inline_results") and st.session_state.get("job_id"):
+        st.divider()
+        st.subheader("Latest job status")
+        render_status_or_results(config, st.session_state["job_id"])
 
 
 def status_view(config: UIConfig) -> None:
@@ -336,7 +346,7 @@ def status_view(config: UIConfig) -> None:
         details = summary.get("details") or {}
         if details:
             st.table(render_engine_table(details))
-        _safe_autorefresh(config.poll_interval, key="status_poll")
+        _poll_if_needed(config, job_id)
     else:
         st.success("Job reached a terminal state. Navigate to Results to review.")
         details = summary.get("details") or {}
@@ -348,29 +358,46 @@ def results_view(config: UIConfig) -> None:
     st.header("Results")
     client = get_client(config)
 
-    # Load job_id from URL if present (restores after browser refresh)
+    # Load job_id from URL if present
     if "job_id" not in st.session_state:
         try:
             params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
             if params.get("job_id"):
-                job_id_from_url = params.get("job_id")
-                if isinstance(job_id_from_url, list):
-                    job_id_from_url = job_id_from_url[0]
-                _save_job_id(job_id_from_url)
+                _save_job_id(params.get("job_id")[0])
         except Exception:
             pass
 
+    job_id = st.session_state.get("job_id", "")
+    
+    # Show results immediately if job_id exists
+    if job_id:
+        try:
+            UUID(str(job_id))  # Validate
+            try:
+                summary = client.get_results(job_id)
+                if not MultiAVClient.is_terminal(summary.get("status")):
+                    st.caption("Still processing. Refreshing automatically until the job finishes…")
+                    _poll_if_needed(config, job_id)
+                render_summary(summary)
+            except Exception as exc:
+                st.error(f"Could not fetch results for {job_id}: {exc}")
+        except ValueError:
+            pass  # Invalid UUID, show input form below
+    
+    # Input form for manual lookup
+    st.divider()
+    st.subheader("Load different job")
     default_job = st.session_state.get("job_id", "")
-    job_input = st.text_input("Job ID", value=default_job)
+    job_input = st.text_input("Job ID", value=default_job, key="job_input_manual")
     sha_lookup = st.text_input("Lookup by SHA256 (uses most recent match)", value="")
-
+    
     if st.button("Load job"):
         if job_input:
             try:
                 _save_job_id(job_input.strip())
+                st.rerun()
             except Exception:
-                st.session_state.pop("job_id", None)
-                st.warning("Invalid job ID format cleared. Please paste a full UUID.")
+                st.warning("Invalid job ID format. Please paste a full UUID.")
                 return
         elif sha_lookup:
             try:
@@ -378,44 +405,12 @@ def results_view(config: UIConfig) -> None:
                 if matches:
                     _save_job_id(matches[0]["job_id"])
                     st.success(f"Loaded job {matches[0]['job_id']} from SHA256 search.")
+                    st.rerun()
                 else:
                     st.warning("No jobs found for that SHA256.")
             except Exception as exc:
                 st.error(f"Lookup failed: {exc}")
-                return
-
-    job_id = st.session_state.get("job_id")
-    if not job_id:
-        st.info("Upload a file or load a job to view results.")
-        return
-
-    try:
-        job_id = str(UUID(str(job_id)))
-    except Exception:
-        st.session_state.pop("job_id", None)
-        st.warning("Invalid job ID cleared. Please upload a new file or load a valid job.")
-        return
-
-    try:
-        summary = client.get_results(job_id)
-    except Exception as exc:
-        st.error(f"Could not fetch results for {job_id}: {exc}")
-        return
-
-    status = summary.get("status")
-    is_terminal = MultiAVClient.is_terminal(status)
     
-    if not is_terminal:
-        # Keep this tab refreshing so users don't sit on a stale partial summary.
-        st.caption("Still processing. Refreshing automatically until the job finishes…")
-        st.write(f"Status: {readable_status(status)}")
-        details = summary.get("details") or {}
-        if details:
-            st.table(render_engine_table(details))
-        _safe_autorefresh(config.poll_interval, key="results_poll")
-    else:
-        render_summary(summary)
-
 
 def history_view(config: UIConfig) -> None:
     st.header("Recent scans")
