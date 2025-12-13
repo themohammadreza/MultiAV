@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+from pathlib import Path
 
 import streamlit as st
 
@@ -32,13 +33,29 @@ def _as_bool(value: object) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on", "y"}
 
 
+def _safe_autorefresh(interval_seconds: float, key: str) -> None:
+    """Trigger periodic reruns; fall back to meta refresh if st.autorefresh is missing."""
+    if hasattr(st, "autorefresh"):
+        st.autorefresh(interval=int(interval_seconds * 1000), key=key)
+    else:
+        st.markdown(
+            f"<meta http-equiv='refresh' content='{interval_seconds}'>",
+            unsafe_allow_html=True,
+        )
+
+
 def load_ui_config() -> UIConfig:
-    try:
-        secrets = st.secrets  # may raise if no secrets file present
-    except FileNotFoundError:
-        secrets = {}
-    except Exception:
-        secrets = {}
+    secrets: Dict[str, object] = {}
+    secrets_paths = [
+        Path(os.getenv("STREAMLIT_SECRETS_PATH", "/home/appuser/.streamlit/secrets.toml")),
+        Path("/app/.streamlit/secrets.toml"),
+    ]
+    if any(path.exists() for path in secrets_paths):
+        try:
+            # Only hit st.secrets when a secrets file actually exists to avoid noisy warnings.
+            secrets = dict(st.secrets)
+        except Exception:
+            secrets = {}
     return UIConfig(
         api_base_url=secrets.get("api_base_url") or os.getenv("API_BASE_URL", "http://localhost:8000"),
         poll_interval=float(secrets.get("poll_interval", os.getenv("POLL_INTERVAL", 2))),
@@ -182,7 +199,7 @@ def status_view(config: UIConfig) -> None:
 
     if not MultiAVClient.is_terminal(summary.get("status")):
         st.caption("Polling every few seconds…")
-        st.autorefresh(interval=int(config.poll_interval * 1000), key="status_poll")
+        _safe_autorefresh(config.poll_interval, key="status_poll")
     else:
         st.success("Job reached a terminal state. Navigate to Results to review.")
 
@@ -193,12 +210,32 @@ def status_view(config: UIConfig) -> None:
 
 def results_view(config: UIConfig) -> None:
     st.header("Results")
+    client = get_client(config)
+
+    default_job = st.session_state.get("job_id", "")
+    job_input = st.text_input("Job ID", value=default_job)
+    sha_lookup = st.text_input("Lookup by SHA256 (uses most recent match)", value="")
+
+    if st.button("Load job"):
+        if job_input:
+            st.session_state["job_id"] = job_input.strip()
+        elif sha_lookup:
+            try:
+                matches = client.list_recent_jobs(sha256=sha_lookup.strip(), limit=1)
+                if matches:
+                    st.session_state["job_id"] = matches[0]["job_id"]
+                    st.success(f"Loaded job {matches[0]['job_id']} from SHA256 search.")
+                else:
+                    st.warning("No jobs found for that SHA256.")
+            except Exception as exc:  # pragma: no cover - Streamlit surfacing
+                st.error(f"Lookup failed: {exc}")
+                return
+
     job_id = st.session_state.get("job_id")
     if not job_id:
-        st.info("Upload a file to view results.")
+        st.info("Upload a file or load a job to view results.")
         return
 
-    client = get_client(config)
     try:
         summary = client.get_results(job_id)
     except Exception as exc:  # pragma: no cover - Streamlit surfacing
@@ -208,7 +245,7 @@ def results_view(config: UIConfig) -> None:
     if not MultiAVClient.is_terminal(summary.get("status")):
         # Keep this tab refreshing so users don't sit on a stale partial summary.
         st.caption("Still processing. Refreshing automatically until the job finishes…")
-        st.autorefresh(interval=int(config.poll_interval * 1000), key="results_poll")
+        _safe_autorefresh(config.poll_interval, key="results_poll")
 
     render_summary(summary)
 
@@ -220,11 +257,22 @@ def history_view(config: UIConfig) -> None:
         return
 
     status_filter = st.selectbox("Status filter", options=["", *sorted(TERMINAL_STATUSES)], index=0)
+    severity_filter = st.selectbox(
+        "Severity filter",
+        options=["", "informational", "low", "medium", "high", "critical"],
+        index=0,
+    )
     hash_filter = st.text_input("SHA256 contains")
+    job_filter = st.text_input("Job ID contains")
 
     client = get_client(config)
     try:
-        jobs = client.list_recent_jobs(status=status_filter or None, sha256=hash_filter or None)
+        jobs = client.list_recent_jobs(
+            status=status_filter or None,
+            severity=severity_filter or None,
+            sha256=hash_filter or None,
+            job_id=job_filter or None,
+        )
     except Exception as exc:  # pragma: no cover - Streamlit surfacing
         st.error(f"Could not load job history: {exc}")
         return
@@ -234,6 +282,12 @@ def history_view(config: UIConfig) -> None:
         return
 
     st.dataframe(jobs, hide_index=True)
+
+    job_options = [item["job_id"] for item in jobs if item.get("job_id")]
+    selected_job = st.selectbox("Jump to job_id", options=[""] + job_options, index=0)
+    if selected_job:
+        st.session_state["job_id"] = selected_job
+        st.success(f"Loaded job {selected_job} for viewing. Check the Results tab.")
 
     if st.session_state.get("last_file_bytes") and st.button("Re-run last upload"):
         try:
@@ -254,13 +308,13 @@ def main() -> None:
     st.title("Multi-AV Streamlit Dashboard")
     st.caption("Upload, monitor, and review scan results without touching raw APIs.")
 
-    tabs = st.tabs(["Upload", "Status", "Results", "History"])
+    tabs = st.tabs(["Upload", "Results", "Status", "History"])
     with tabs[0]:
         upload_view(config)
     with tabs[1]:
-        status_view(config)
-    with tabs[2]:
         results_view(config)
+    with tabs[2]:
+        status_view(config)
     with tabs[3]:
         history_view(config)
 

@@ -43,6 +43,8 @@ def test_upload_and_poll_flow():
 def test_list_recent_jobs_and_engines():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/ui/jobs/recent":
+            assert request.url.params.get("severity") == "high"
+            assert request.url.params.get("job_id") == "abc"
             return httpx.Response(200, json={"items": [{"job_id": "1"}]})
         if request.url.path == "/api/v1/ui/engines/active":
             return httpx.Response(200, json={"engines": [{"engine": "stub", "timeout": 10, "weight": 1.0}]})
@@ -50,7 +52,7 @@ def test_list_recent_jobs_and_engines():
 
     client = build_client(httpx.MockTransport(handler))
 
-    jobs = client.list_recent_jobs(limit=5)
+    jobs = client.list_recent_jobs(limit=5, severity="high", job_id="abc")
     assert jobs == [{"job_id": "1"}]
 
     engines = client.get_engines()

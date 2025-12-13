@@ -68,13 +68,19 @@ class MultiAVClient:
         *,
         limit: int = 50,
         status: Optional[str] = None,
+        severity: Optional[str] = None,
         sha256: Optional[str] = None,
+        job_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         params = {"limit": min(max(limit, 1), 200)}
         if status:
             params["status"] = status
         if sha256:
             params["sha256"] = sha256
+        if severity:
+            params["severity"] = severity
+        if job_id:
+            params["job_id"] = job_id
         response = self._client.get("/api/v1/ui/jobs/recent", params=params)
         response.raise_for_status()
         payload = response.json()

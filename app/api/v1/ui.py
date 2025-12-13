@@ -17,7 +17,9 @@ def list_recent_jobs(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     status: Optional[str] = Query(None, description="Filter by status substring"),
+    severity: Optional[str] = Query(None, description="Filter by severity label"),
     sha256: Optional[str] = Query(None, description="Filter by SHA256 substring"),
+    job_id: Optional[str] = Query(None, description="Filter by job_id"),
 ):
     query = (
         db.query(ScanJob)
@@ -30,6 +32,8 @@ def list_recent_jobs(
         query = query.filter(ScanJob.status.ilike(f"%{status}%"))
     if sha256:
         query = query.filter(File.sha256.ilike(f"%{sha256}%"))
+    if job_id:
+        query = query.filter(ScanJob.id == job_id)
 
     jobs: List[ScanJob] = query.limit(limit).all()
 
@@ -39,6 +43,8 @@ def list_recent_jobs(
             job,
             sorted(job.results, key=lambda r: r.scanned_at or job.created_at),
         )
+        if severity and summary.get("severity") != severity:
+            continue
         items.append(
             {
                 "job_id": str(job.id),

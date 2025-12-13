@@ -42,6 +42,22 @@ def test_recent_jobs_returns_summary():
     assert payload["items"][0]["sha256"] == "abc123"
 
 
+def test_recent_jobs_filters_by_severity_and_job():
+    job_id = seed_job(status="done")
+    # inject a severity to test filter pass
+    with SessionLocal() as session:
+        job = session.query(ScanJob).filter(ScanJob.id == job_id).first()
+        if job and job.results:
+            job.results[0].result["severity"] = "high"
+            session.commit()
+
+    response = client.get(f"/api/v1/ui/jobs/recent?severity=high&job_id={job_id}")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["job_id"] == job_id
+
+
 def test_active_engines_uses_registry(monkeypatch):
     configure_stub_engines(
         monkeypatch,
