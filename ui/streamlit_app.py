@@ -33,7 +33,12 @@ def _as_bool(value: object) -> bool:
 
 
 def load_ui_config() -> UIConfig:
-    secrets = getattr(st, "secrets", {}) or {}
+    try:
+        secrets = st.secrets  # may raise if no secrets file present
+    except FileNotFoundError:
+        secrets = {}
+    except Exception:
+        secrets = {}
     return UIConfig(
         api_base_url=secrets.get("api_base_url") or os.getenv("API_BASE_URL", "http://localhost:8000"),
         poll_interval=float(secrets.get("poll_interval", os.getenv("POLL_INTERVAL", 2))),
