@@ -1,9 +1,11 @@
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from pathlib import Path
 from uuid import UUID
+from collections import deque
 
 import streamlit as st
 
@@ -35,14 +37,15 @@ def _as_bool(value: object) -> bool:
 
 
 def _safe_autorefresh(interval_seconds: float, key: str) -> None:
-    """Trigger periodic reruns; fall back to meta refresh if st.autorefresh is missing."""
-    if hasattr(st, "autorefresh"):
-        st.autorefresh(interval=int(interval_seconds * 1000), key=key)
-    else:
-        st.markdown(
-            f"<meta http-equiv='refresh' content='{interval_seconds}'>",
-            unsafe_allow_html=True,
-        )
+    """Trigger periodic reruns using Streamlit's controlled rerun to preserve state."""
+    refresh_key = f"_last_refresh_{key}"
+    last = st.session_state.get(refresh_key, 0)
+    now = time.time()
+    
+    if now - last >= interval_seconds:
+        st.session_state[refresh_key] = now
+        time.sleep(0.1)  # Small delay before rerun
+        st.rerun()
 
 
 def _save_job_id(job_id: str) -> None:
@@ -57,10 +60,16 @@ def _save_job_id(job_id: str) -> None:
         return
 
     st.session_state["job_id"] = job_id
-    recent = st.session_state.get("recent_job_ids") or []
+    
+    # Maintain recent job list
+    if "recent_job_ids" not in st.session_state:
+        st.session_state["recent_job_ids"] = []
+    
+    recent = st.session_state["recent_job_ids"]
     if job_id not in recent:
-        recent = [job_id] + recent
-    st.session_state["recent_job_ids"] = recent[:20]
+        recent.insert(0, job_id)
+        st.session_state["recent_job_ids"] = recent[:20]
+    
     try:
         if hasattr(st, "query_params"):
             st.query_params["job_id"] = job_id
@@ -71,51 +80,84 @@ def _save_job_id(job_id: str) -> None:
         pass
 
 
-def render_status_or_results(config: UIConfig, job_id: str) -> None:
+def render_status_or_results(config: UIConfig, job_id: str, auto_refresh: bool = True) -> None:
     """Shared renderer to show current status/results for a job id."""
     try:
         job_id = str(UUID(str(job_id)))
     except Exception:
+        st.session_state.pop("job_id", None)
         st.warning("Job ID is not a valid UUID. Load a valid job to view details.")
         return
 
     client = get_client(config)
     try:
         summary = client.get_results(job_id)
-    except Exception as exc:  # pragma: no cover - Streamlit surfacing
+    except Exception as exc:
         st.error(f"Could not fetch status for {job_id}: {exc}")
         return
 
+    status = summary.get("status")
+    is_terminal = MultiAVClient.is_terminal(status)
+    
     st.write(f"Job: {job_id}")
-    st.write(f"Status: {readable_status(summary.get('status'))}")
-    if not MultiAVClient.is_terminal(summary.get("status")):
+    st.write(f"Status: {readable_status(status)}")
+    
+    if not is_terminal:
         st.caption("Polling…")
-        _safe_autorefresh(config.poll_interval, key=f"inline_poll_{job_id}")
         details = summary.get("details") or {}
         if details:
             st.table(render_engine_table(details))
+        if auto_refresh:
+            _safe_autorefresh(config.poll_interval, key=f"inline_poll_{job_id}")
     else:
         render_summary(summary)
 
 
 def load_ui_config() -> UIConfig:
-    secrets: Dict[str, object] = {}
-    secrets_paths = [
-        Path(os.getenv("STREAMLIT_SECRETS_PATH", "/home/appuser/.streamlit/secrets.toml")),
-        Path("/app/.streamlit/secrets.toml"),
-    ]
-    if any(path.exists() for path in secrets_paths):
+    # Prefer environment variables first, then secrets as fallback
+    api_base_url = os.getenv("API_BASE_URL")
+    poll_interval = os.getenv("POLL_INTERVAL")
+    request_timeout = os.getenv("REQUEST_TIMEOUT")
+    max_upload_mb = os.getenv("MAX_UPLOAD_MB")
+    feature_history = os.getenv("FEATURE_HISTORY")
+    
+    # Only try secrets if env vars are missing
+    if not api_base_url:
         try:
-            # Only hit st.secrets when a secrets file actually exists to avoid noisy warnings.
-            secrets = dict(st.secrets)
+            api_base_url = st.secrets.get("api_base_url", "http://localhost:8000")
         except Exception:
-            secrets = {}
+            api_base_url = "http://localhost:8000"
+    
+    if not poll_interval:
+        try:
+            poll_interval = st.secrets.get("poll_interval", 2)
+        except Exception:
+            poll_interval = 2
+    
+    if not request_timeout:
+        try:
+            request_timeout = st.secrets.get("REQUEST_TIMEOUT", 15)
+        except Exception:
+            request_timeout = 15
+    
+    if not max_upload_mb:
+        try:
+            max_upload_mb = st.secrets.get("MAX_UPLOAD_MB", 50)
+        except Exception:
+            max_upload_mb = 50
+    
+    if feature_history is None:
+        try:
+            feature_history = st.secrets.get("FEATURE_HISTORY", True)
+        except Exception:
+            feature_history = True
+    
     return UIConfig(
-        api_base_url=secrets.get("api_base_url") or os.getenv("API_BASE_URL", "http://localhost:8000"),
-        poll_interval=float(secrets.get("poll_interval", os.getenv("POLL_INTERVAL", 2))),
-        request_timeout=float(secrets.get("REQUEST_TIMEOUT", os.getenv("REQUEST_TIMEOUT", 15))),
-        max_upload_mb=int(secrets.get("MAX_UPLOAD_MB", os.getenv("MAX_UPLOAD_MB", 50))),
-        feature_history=_as_bool(secrets.get("FEATURE_HISTORY", os.getenv("FEATURE_HISTORY", True))),
+        api_base_url=str(api_base_url),
+        poll_interval=float(poll_interval),
+        request_timeout=float(request_timeout),
+        max_upload_mb=int(max_upload_mb),
+        feature_history=_as_bool(feature_history),
     )
 
 
@@ -123,6 +165,7 @@ def get_client(config: UIConfig) -> MultiAVClient:
     client = st.session_state.get("multiav_client")
     if client:
         return client
+    
     client = MultiAVClient(
         APIConfig(
             base_url=config.api_base_url,
@@ -131,6 +174,13 @@ def get_client(config: UIConfig) -> MultiAVClient:
         )
     )
     st.session_state["multiav_client"] = client
+    
+    # Register cleanup on session end (best effort with atexit)
+    if "client_cleanup_registered" not in st.session_state:
+        import atexit
+        atexit.register(lambda: client.close() if client else None)
+        st.session_state["client_cleanup_registered"] = True
+    
     return client
 
 
@@ -220,22 +270,35 @@ def upload_view(config: UIConfig) -> None:
         upload_bytes = uploaded.getvalue()
         try:
             response = client.upload_file(upload_bytes, filename=uploaded.name, content_type=uploaded.type)
-        except Exception as exc:  # pragma: no cover - Streamlit surfacing
+        except Exception as exc:
             st.error(f"Upload failed: {exc}")
             return
 
-        _save_job_id(response.get("job_id"))
-        st.session_state["last_file_bytes"] = upload_bytes
-        st.session_state["last_file_name"] = uploaded.name
-        st.session_state["cached"] = response.get("cached", False)
-        st.success(f"Job {response.get('job_id')} submitted. Cached={response.get('cached')}")
-        st.session_state["show_inline_results"] = True
-
-    # After an upload, render a live preview so users don't lose track on rerun.
-    if st.session_state.get("show_inline_results") and st.session_state.get("job_id"):
-        st.divider()
-        st.subheader("Latest job status")
-        render_status_or_results(config, st.session_state["job_id"])
+        job_id = response.get("job_id")
+        cached = response.get("cached", False)
+        
+        _save_job_id(job_id)
+        
+        # Store upload in history queue (max 5 recent uploads)
+        if "upload_history" not in st.session_state:
+            st.session_state["upload_history"] = deque(maxlen=5)
+        
+        st.session_state["upload_history"].appendleft({
+            "bytes": upload_bytes,
+            "name": uploaded.name,
+            "job_id": job_id,
+            "cached": cached,
+        })
+        
+        st.success(f"✅ Job `{job_id}` submitted. Cached: {cached}")
+        
+        if cached:
+            st.info("📋 This file was scanned before. Navigate to **Results** tab to view cached results.")
+        else:
+            st.info("🔄 Scan in progress. Navigate to **Results** or **Status** tab to monitor progress.")
+        
+        # Don't auto-refresh inline - let user navigate to Results/Status tabs
+        # This prevents the annoying page refresh that clears the success message
 
 
 def status_view(config: UIConfig) -> None:
@@ -248,31 +311,37 @@ def status_view(config: UIConfig) -> None:
     try:
         job_id = str(UUID(str(job_id)))
     except Exception:
-        st.warning("Job ID is not a valid UUID. Load a valid job to view status.")
+        st.session_state.pop("job_id", None)
+        st.warning("Invalid job ID cleared. Please upload a new file.")
         return
 
     client = get_client(config)
     try:
         summary = client.get_results(job_id)
-    except Exception as exc:  # pragma: no cover - Streamlit surfacing
+    except Exception as exc:
         st.error(f"Could not fetch status: {exc}")
         return
 
-    status_label = readable_status(summary.get("status"))
+    status = summary.get("status")
+    is_terminal = MultiAVClient.is_terminal(status)
+    
+    status_label = readable_status(status)
     st.subheader(f"Job {job_id}")
     st.write(f"Status: {status_label}")
     st.write("Started:", summary.get("started_at"))
     st.write("Completed:", summary.get("completed_at") or "—")
 
-    if not MultiAVClient.is_terminal(summary.get("status")):
+    if not is_terminal:
         st.caption("Polling every few seconds…")
+        details = summary.get("details") or {}
+        if details:
+            st.table(render_engine_table(details))
         _safe_autorefresh(config.poll_interval, key="status_poll")
     else:
         st.success("Job reached a terminal state. Navigate to Results to review.")
-
-    details = summary.get("details") or {}
-    if details:
-        st.table(render_engine_table(details))
+        details = summary.get("details") or {}
+        if details:
+            st.table(render_engine_table(details))
 
 
 def results_view(config: UIConfig) -> None:
@@ -284,7 +353,10 @@ def results_view(config: UIConfig) -> None:
         try:
             params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
             if params.get("job_id"):
-                _save_job_id(params.get("job_id")[0])
+                job_id_from_url = params.get("job_id")
+                if isinstance(job_id_from_url, list):
+                    job_id_from_url = job_id_from_url[0]
+                _save_job_id(job_id_from_url)
         except Exception:
             pass
 
@@ -297,7 +369,8 @@ def results_view(config: UIConfig) -> None:
             try:
                 _save_job_id(job_input.strip())
             except Exception:
-                st.warning("Invalid job ID format. Please paste a full UUID.")
+                st.session_state.pop("job_id", None)
+                st.warning("Invalid job ID format cleared. Please paste a full UUID.")
                 return
         elif sha_lookup:
             try:
@@ -307,7 +380,7 @@ def results_view(config: UIConfig) -> None:
                     st.success(f"Loaded job {matches[0]['job_id']} from SHA256 search.")
                 else:
                     st.warning("No jobs found for that SHA256.")
-            except Exception as exc:  # pragma: no cover - Streamlit surfacing
+            except Exception as exc:
                 st.error(f"Lookup failed: {exc}")
                 return
 
@@ -319,21 +392,29 @@ def results_view(config: UIConfig) -> None:
     try:
         job_id = str(UUID(str(job_id)))
     except Exception:
-        st.warning("Job ID is not a valid UUID. Load a valid job to view results.")
+        st.session_state.pop("job_id", None)
+        st.warning("Invalid job ID cleared. Please upload a new file or load a valid job.")
         return
 
     try:
         summary = client.get_results(job_id)
-    except Exception as exc:  # pragma: no cover - Streamlit surfacing
+    except Exception as exc:
         st.error(f"Could not fetch results for {job_id}: {exc}")
         return
 
-    if not MultiAVClient.is_terminal(summary.get("status")):
+    status = summary.get("status")
+    is_terminal = MultiAVClient.is_terminal(status)
+    
+    if not is_terminal:
         # Keep this tab refreshing so users don't sit on a stale partial summary.
         st.caption("Still processing. Refreshing automatically until the job finishes…")
+        st.write(f"Status: {readable_status(status)}")
+        details = summary.get("details") or {}
+        if details:
+            st.table(render_engine_table(details))
         _safe_autorefresh(config.poll_interval, key="results_poll")
-
-    render_summary(summary)
+    else:
+        render_summary(summary)
 
 
 def history_view(config: UIConfig) -> None:
@@ -342,13 +423,21 @@ def history_view(config: UIConfig) -> None:
         st.info("History view is disabled")
         return
 
-    status_filter = st.selectbox("Status filter", options=["", *sorted(TERMINAL_STATUSES)], index=0)
+    # Persist filter state across tab switches
+    status_filter = st.selectbox(
+        "Status filter",
+        options=["", *sorted(TERMINAL_STATUSES)],
+        index=0,
+        key="history_status_filter"
+    )
     severity_filter = st.selectbox(
         "Severity filter",
         options=["", "informational", "low", "medium", "high", "critical"],
         index=0,
+        key="history_severity_filter"
     )
-    hash_filter = st.text_input("SHA256 contains")
+    hash_filter = st.text_input("SHA256 contains", key="history_hash_filter")
+    job_id_filter = st.text_input("Job ID contains", key="history_job_id_filter")
 
     client = get_client(config)
     try:
@@ -356,9 +445,9 @@ def history_view(config: UIConfig) -> None:
             status=status_filter or None,
             severity=severity_filter or None,
             sha256=hash_filter or None,
-            job_id=None,
+            job_id=job_id_filter or None,
         )
-    except Exception as exc:  # pragma: no cover - Streamlit surfacing
+    except Exception as exc:
         st.error(f"Could not load job history: {exc}")
         return
 
@@ -377,16 +466,28 @@ def history_view(config: UIConfig) -> None:
 
     st.dataframe(jobs, hide_index=True)
 
-    if st.session_state.get("last_file_bytes") and st.button("Re-run last upload"):
-        try:
-            response = client.upload_file(
-                st.session_state["last_file_bytes"],
-                filename=st.session_state.get("last_file_name", "reupload.bin"),
-            )
-            st.session_state["job_id"] = response.get("job_id")
-            st.success(f"Re-run submitted as job {response.get('job_id')}.")
-        except Exception as exc:  # pragma: no cover - Streamlit surfacing
-            st.error(f"Re-run failed: {exc}")
+    # Re-run last upload with better UX
+    if "upload_history" in st.session_state and st.session_state["upload_history"]:
+        st.divider()
+        st.subheader("Recent uploads")
+        
+        for idx, upload_record in enumerate(st.session_state["upload_history"]):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text(f"{upload_record['name']} (Job: {upload_record['job_id'][:8]}...)")
+            with col2:
+                if st.button(f"Re-scan", key=f"rescan_{idx}"):
+                    try:
+                        response = client.upload_file(
+                            upload_record["bytes"],
+                            filename=upload_record["name"],
+                        )
+                        new_job_id = response.get("job_id")
+                        _save_job_id(new_job_id)
+                        st.success(f"Re-scan submitted as job {new_job_id}.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Re-scan failed: {exc}")
 
 
 def main() -> None:
