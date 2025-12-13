@@ -230,7 +230,6 @@ def upload_view(config: UIConfig) -> None:
         st.session_state["cached"] = response.get("cached", False)
         st.success(f"Job {response.get('job_id')} submitted. Cached={response.get('cached')}")
         st.session_state["show_inline_results"] = True
-        st.session_state["switch_to_results"] = True
 
     # After an upload, render a live preview so users don't lose track on rerun.
     if st.session_state.get("show_inline_results") and st.session_state.get("job_id"):
