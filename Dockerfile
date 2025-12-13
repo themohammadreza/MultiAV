@@ -29,6 +29,9 @@ RUN set -eux; \
 
 WORKDIR /app
 
+# Create a non-root user for running Streamlit (compose runs the streamlit service as UID 1000)
+RUN useradd -u 1000 -m appuser
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --retries 5 --timeout 120 -r requirements.txt
