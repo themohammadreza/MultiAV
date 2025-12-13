@@ -58,6 +58,12 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
    curl http://localhost:8000/api/v1/results/<job_id>
    ```
    Or open `http://localhost:8000/docs` for Swagger UI.
+4. Open the Streamlit dashboard at `http://localhost:8501` to upload, monitor, and browse results without touching the raw APIs.
+
+**Conda users**: export a minimal environment spec from installed packages with:
+```bash
+conda env export --from-history > environment.yml
+```
 
 ### Engine switches and tuning
 - Edit `config/engines.yaml` to toggle engines or adjust weights/timeouts:
@@ -100,6 +106,16 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 ## API surface (v1)
 - `POST /api/v1/scan/` — multipart upload (`file` field). Returns `{job_id, status, cached, scanned_at?}`.
 - `GET /api/v1/results/{job_id}` — aggregated verdict, severity/confidence, families/categories, and `details` keyed by engine.
+- `GET /api/v1/ui/jobs/recent` — lightweight feed of recent jobs with status/verdict/severity and SHA256.
+- `GET /api/v1/ui/engines/active` — enumerates enabled engines with configured timeouts and weights.
+
+## Streamlit dashboard
+- Located at `ui/streamlit_app.py`; built into the standard image and served via `docker compose up` on port 8501.
+- Configure via environment or `st.secrets`:
+  - `API_BASE_URL` (defaults to `http://localhost:8000`)
+  - `POLL_INTERVAL`, `REQUEST_TIMEOUT`, `MAX_UPLOAD_MB`, `FEATURE_HISTORY`
+- Features: upload with size guard, live polling with per-engine table, aggregated results download, and a recent-history view backed by read-only endpoints.
+- To run locally without Docker: `streamlit run ui/streamlit_app.py` after installing `requirements.txt`.
 
 ## Roadmap / still to build
 - Engine prioritization / smart scheduling policies.

@@ -38,5 +38,6 @@ COPY config ./config
 
 # Copy application code (including YARA rules)
 COPY app ./app
+COPY ui ./ui
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

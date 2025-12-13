@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.v1 import results, scan
+from app.api.v1 import results, scan, ui
 from app.services.storage import get_storage_service
 
 @asynccontextmanager
@@ -31,3 +31,4 @@ app = FastAPI(
 
 app.include_router(scan.router, prefix="/api/v1/scan", tags=["Scan"])
 app.include_router(results.router, prefix="/api/v1/results", tags=["Results"])
+app.include_router(ui.router, prefix="/api/v1/ui", tags=["UI"])
