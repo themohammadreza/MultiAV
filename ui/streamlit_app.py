@@ -76,7 +76,7 @@ def render_engine_table(details: Dict[str, Dict]) -> List[Dict[str, object]]:
                 "signature": payload.get("signature") or payload.get("rule"),
                 "severity": payload.get("severity"),
                 "confidence": payload.get("confidence"),
-                "duration": payload.get("duration"),
+                "duration_ms": payload.get("duration_ms") or payload.get("duration"),
                 "error": payload.get("error") or payload.get("message"),
             }
         )

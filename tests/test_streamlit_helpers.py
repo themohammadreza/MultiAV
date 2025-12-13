@@ -17,16 +17,17 @@ def test_render_engine_table():
         {
             "clamav": {
                 "status": "ok",
-                "verdict": "clean",
-                "signature": "sig1",
-                "severity": "low",
-                "confidence": 0.5,
-                "duration": 1.2,
-                "error": None,
-            }
+            "verdict": "clean",
+            "signature": "sig1",
+            "severity": "low",
+            "confidence": 0.5,
+            "duration": 1.2,
+            "error": None,
         }
-    )
+    }
+)
 
     assert table[0]["engine"] == "clamav"
     assert table[0]["verdict"] == "clean"
     assert table[0]["signature"] == "sig1"
+    assert table[0]["duration_ms"] == 1.2
