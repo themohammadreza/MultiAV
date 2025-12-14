@@ -88,9 +88,8 @@ def render_status_or_results(config: UIConfig, job_id: str, auto_refresh: bool =
     try:
         job_id = str(UUID(str(job_id)))
     except Exception:
-        st.session_state.pop("job_id", None)
-        st.warning("Job ID is not a valid UUID. Load a valid job to view details.")
-        return
+        st.warning("Invalid job ID format")
+        return  # Exit before making API call
 
     client = get_client(config)
     try:
@@ -271,6 +270,9 @@ def upload_view(config: UIConfig) -> None:
         st.error(f"File exceeds max upload of {config.max_upload_mb} MB")
         return
 
+    # optional for re-upload:
+    store_for_reupload = st.checkbox("Enable re-upload feature", value=False, 
+                                  help="Keep file in memory for quick re-scan")
     if st.button("Submit for scanning"):
         upload_bytes = uploaded.getvalue()
         try:
@@ -280,9 +282,14 @@ def upload_view(config: UIConfig) -> None:
             return
 
         _save_job_id(response.get("job_id"))
-        st.session_state["last_file_bytes"] = upload_bytes
+        # Only store bytes if user opted in
+        if store_for_reupload:
+            st.session_state["last_file_bytes"] = upload_bytes
+            
+        # Only store if re-upload feature enabled (moved to before upload button)
         st.session_state["last_file_name"] = uploaded.name
         st.session_state["cached"] = response.get("cached", False)
+        # fix unexpexted re-run:
         
         # Store upload in history queue (max 5 recent uploads)
         if "upload_history" not in st.session_state:
@@ -301,11 +308,14 @@ def upload_view(config: UIConfig) -> None:
         else:
             st.success(f"✅ Job `{response.get('job_id')}` submitted. Cached: False")
         
-        st.session_state["show_inline_results"] = True
+        # remove to fix unexpexted re-run:
+        #st.session_state["show_inline_results"] = True
         st.rerun()  # Force controlled rerun to persist message
 
     # Show live preview after upload
-    if st.session_state.get("show_inline_results") and st.session_state.get("job_id"):
+    # remove to fix unexpexted re-run:
+    # if st.session_state.get("show_inline_results") and \
+    if st.session_state.get("job_id"):
         st.divider()
         st.subheader("Latest job status")
         render_status_or_results(config, st.session_state["job_id"])
