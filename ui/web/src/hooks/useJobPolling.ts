@@ -3,7 +3,7 @@ import { fetchJobResult, isTerminal } from '@/lib/api-client';
 import { ResultSummary } from '@/lib/api-types';
 import { loadConfig } from '@/lib/config';
 import { validateJobId } from '@/lib/validators';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 const config = loadConfig();
 
@@ -31,6 +31,8 @@ export function useJobPolling(jobId?: string) {
     queryKey: ['job', parsedId],
     queryFn: () => fetchJobResult(parsedId!),
     enabled: Boolean(parsedId),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     refetchInterval: (query) => {
       if (!query.state.data) return config.pollIntervalMs;
       return shouldContinue(query.state.data.status) ? config.pollIntervalMs : false;
@@ -41,15 +43,6 @@ export function useJobPolling(jobId?: string) {
     },
     staleTime: 1000
   });
-
-  useEffect(() => {
-    if (!parsedId) return;
-    const timer = setTimeout(() => {
-      if (query.isFetching || query.isLoading) return;
-      query.refetch();
-    }, config.pollTimeoutMs);
-    return () => clearTimeout(timer);
-  }, [parsedId, query]);
 
   return { ...query, validationError };
 }
