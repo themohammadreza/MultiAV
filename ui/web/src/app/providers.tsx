@@ -5,7 +5,6 @@ import { Notifications } from '@mantine/notifications';
 import { PropsWithChildren, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from '@/styles/theme';
-import '@/styles/globals.css';
 
 export function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());

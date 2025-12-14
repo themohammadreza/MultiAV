@@ -1,5 +1,4 @@
 'use client';
-
 import { AppShell, Burger, Group, NavLink, ScrollArea, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import Link from 'next/link';
@@ -40,7 +39,7 @@ export function AppLayout({ children }: PropsWithChildren) {
               <NavLink
                 component={Link}
                 key={link.href}
-                href={link.href}
+                href={link.href as any}
                 label={link.label}
                 active={pathname === link.href}
               />

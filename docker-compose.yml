@@ -181,6 +181,8 @@ services:
     build:
       context: ./ui/web
       dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://app:8000
     image: multiav-frontend:latest
     container_name: multiav-frontend
     environment:

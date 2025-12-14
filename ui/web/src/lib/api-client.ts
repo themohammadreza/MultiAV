@@ -3,6 +3,7 @@ import { loadConfig } from './config';
 
 const config = loadConfig();
 const TERMINAL_STATUSES: Array<JobStatus | string> = ['done', 'done_with_errors', 'error'];
+const apiBase = config.apiBaseUrl.replace(/\/+$/, '');
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -21,7 +22,7 @@ export async function submitScan(file: File): Promise<ScanResponse> {
   const form = new FormData();
   form.append('file', file);
 
-  const response = await fetch(`${config.apiBaseUrl}/api/v1/scan/`, {
+  const response = await fetch(`${apiBase}/api/v1/scan/`, {
     method: 'POST',
     body: form
   });
@@ -30,16 +31,16 @@ export async function submitScan(file: File): Promise<ScanResponse> {
 }
 
 export async function fetchJobResult(jobId: string): Promise<ResultSummary> {
-  const response = await fetch(`${config.apiBaseUrl}/api/v1/results/${jobId}`);
+  const response = await fetch(`${apiBase}/api/v1/results/${jobId}`);
   return handleResponse<ResultSummary>(response);
 }
 
 export async function fetchRecentJobs(): Promise<RecentJobsResponse> {
-  const response = await fetch(`${config.apiBaseUrl}/api/v1/ui/jobs/recent`);
+  const response = await fetch(`${apiBase}/api/v1/ui/jobs/recent`);
   return handleResponse<RecentJobsResponse>(response);
 }
 
 export async function fetchActiveEngines(): Promise<ActiveEnginesResponse> {
-  const response = await fetch(`${config.apiBaseUrl}/api/v1/ui/engines/active`);
+  const response = await fetch(`${apiBase}/api/v1/ui/engines/active`);
   return handleResponse<ActiveEnginesResponse>(response);
 }

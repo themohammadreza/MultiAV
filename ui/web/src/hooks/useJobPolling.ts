@@ -15,6 +15,7 @@ function shouldContinue(status?: string | null): boolean {
 
 export function useJobPolling(jobId?: string) {
   const [validationError, setValidationError] = useState<Error | null>(null);
+
   const parsedId = useMemo(() => {
     if (!jobId) return undefined;
     try {
@@ -30,9 +31,9 @@ export function useJobPolling(jobId?: string) {
     queryKey: ['job', parsedId],
     queryFn: () => fetchJobResult(parsedId!),
     enabled: Boolean(parsedId),
-    refetchInterval: (data) => {
-      if (!data) return config.pollIntervalMs;
-      return shouldContinue(data.status) ? config.pollIntervalMs : false;
+    refetchInterval: (query) => {
+      if (!query.state.data) return config.pollIntervalMs;
+      return shouldContinue(query.state.data.status) ? config.pollIntervalMs : false;
     },
     retry(failureCount, error) {
       if (error.message.includes('UUID')) return false;

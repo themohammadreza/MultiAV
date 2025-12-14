@@ -13,6 +13,7 @@ export default function HistoryPage() {
   return (
     <Stack gap="md">
       <Title order={2}>History</Title>
+
       <Card withBorder>
         <Stack>
           <Group justify="space-between">
@@ -30,11 +31,27 @@ export default function HistoryPage() {
             </Table.Thead>
             <Table.Tbody>
               {(data?.items ?? []).map((job) => (
-                <Table.Tr key={job.job_id} component={Link} href={`/results/${job.job_id}`}>
-                  <Table.Td>{job.job_id}</Table.Td>
-                  <Table.Td>{job.status}</Table.Td>
-                  <Table.Td>{job.verdict ?? 'pending'}</Table.Td>
-                  <Table.Td>{job.severity ?? 'n/a'}</Table.Td>
+                <Table.Tr key={job.job_id} style={{ cursor: 'pointer' }}>
+                  <Table.Td>
+                    <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {job.job_id}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {job.status}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {job.verdict ?? 'pending'}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {job.severity ?? 'n/a'}
+                    </Link>
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -59,11 +76,27 @@ export default function HistoryPage() {
             </Table.Thead>
             <Table.Tbody>
               {cachedHistory.map((entry) => (
-                <Table.Tr key={entry.jobId} component={Link} href={`/results/${entry.jobId}`}>
-                  <Table.Td>{entry.jobId}</Table.Td>
-                  <Table.Td>{entry.fileName}</Table.Td>
-                  <Table.Td>{(entry.size / 1024).toFixed(1)} KB</Table.Td>
-                  <Table.Td>{entry.fileData ? 'yes' : 'no'}</Table.Td>
+                <Table.Tr key={entry.jobId} style={{ cursor: 'pointer' }}>
+                  <Table.Td>
+                    <Link href={`/results/${entry.jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {entry.jobId}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${entry.jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {entry.fileName}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${entry.jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {(entry.size / 1024).toFixed(1)} KB
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${entry.jobId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {entry.fileData ? 'yes' : 'no'}
+                    </Link>
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

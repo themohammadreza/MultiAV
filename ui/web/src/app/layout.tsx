@@ -1,3 +1,7 @@
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '../styles/globals.css';
+
 import type { Metadata } from 'next';
 import { ColorSchemeScript } from '@mantine/core';
 import { Providers } from './providers';

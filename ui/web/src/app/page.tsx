@@ -124,9 +124,12 @@ export default function UploadPage() {
             render={({ field }) => (
               <Switch
                 label="Cache upload for re-scan (stores file client-side)"
-                {...field}
-                disabled={mutation.isPending || !config.featureHistory}
                 checked={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                disabled={mutation.isPending || !config.featureHistory}
+                
               />
             )}
           />

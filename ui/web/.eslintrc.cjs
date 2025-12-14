@@ -1,11 +1,6 @@
 module.exports = {
-  root: true,
-  parserOptions: {
-    ecmaVersion: 2020,
-    sourceType: 'module'
-  },
-  extends: ['next/core-web-vitals', 'prettier'],
+  extends: ['next/core-web-vitals'],
   rules: {
-    'react/jsx-key': ['error', { checkFragmentShorthand: true }]
-  }
+    // Add any custom rules here
+  },
 };

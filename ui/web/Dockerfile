@@ -1,5 +1,8 @@
 # Frontend build
 FROM node:20-alpine AS builder
+ARG API_PROXY_TARGET
+ENV API_PROXY_TARGET=${API_PROXY_TARGET}
+ENV NEXT_PUBLIC_API_PROXY_TARGET=${API_PROXY_TARGET}
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN npm install
