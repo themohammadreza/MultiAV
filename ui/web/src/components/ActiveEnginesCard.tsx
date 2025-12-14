@@ -17,17 +17,17 @@ export function ActiveEnginesCard() {
         <Table>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Version</Table.Th>
+              <Table.Th>Engine</Table.Th>
+              <Table.Th>Timeout (s)</Table.Th>
+              <Table.Th>Weight</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {(data?.engines ?? []).map((engine) => (
-              <Table.Tr key={engine.name}>
-                <Table.Td>{engine.name}</Table.Td>
-                <Table.Td>{engine.status}</Table.Td>
-                <Table.Td>{engine.version ?? '—'}</Table.Td>
+              <Table.Tr key={engine.engine}>
+                <Table.Td>{engine.engine}</Table.Td>
+                <Table.Td>{engine.timeout ?? '—'}</Table.Td>
+                <Table.Td>{engine.weight ?? '—'}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>

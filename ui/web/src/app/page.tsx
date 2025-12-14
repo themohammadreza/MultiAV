@@ -11,7 +11,6 @@ import { addToHistory } from '@/lib/history-cache';
 import { submitScan } from '@/lib/api-client';
 import { loadConfig } from '@/lib/config';
 import { UploadFormValues, uploadFormSchema } from '@/lib/validators';
-import { isTerminal } from '@/lib/api-client';
 import Link from 'next/link';
 
 const config = loadConfig();
@@ -29,29 +28,30 @@ export default function UploadPage() {
       if (values.file.size > config.uploadSizeLimitMb * 1024 * 1024) {
         throw new Error(`File exceeds ${config.uploadSizeLimitMb}MB limit`);
       }
-      return submitScan(values.file, values.cacheUpload);
+      return submitScan(values.file);
     },
     onSuccess: async (data, variables) => {
-      notifications.show({ title: 'Upload started', message: `Job ${data.job_id} queued`, color: 'blue' });
-      const shouldPersistBytes = variables.cacheUpload;
+      notifications.show({ title: 'Upload started', message: `Job ${data.job_id} ${data.status}`, color: 'blue' });
+      const shouldPersistBytes = variables.cacheUpload && config.featureHistory;
       let encoded: string | undefined;
       if (shouldPersistBytes && selectedFile) {
         const buffer = await selectedFile.arrayBuffer();
         encoded = btoa(String.fromCharCode(...new Uint8Array(buffer)));
       }
-      addToHistory(
-        {
-          jobId: data.job_id,
-          fileName: selectedFile?.name ?? 'unknown',
-          mimeType: selectedFile?.type ?? 'application/octet-stream',
-          size: selectedFile?.size ?? 0,
-          submittedAt: data.submitted_at,
-          cached: data.cached,
-          verdict: isTerminal(data.status) ? data.status : undefined,
-          fileData: encoded
-        },
-        shouldPersistBytes
-      );
+      if (config.featureHistory) {
+        addToHistory(
+          {
+            jobId: data.job_id,
+            fileName: selectedFile?.name ?? 'unknown',
+            mimeType: selectedFile?.type ?? 'application/octet-stream',
+            size: selectedFile?.size ?? 0,
+            startedAt: data.scanned_at ?? new Date().toISOString(),
+            verdict: isStatusTerminal(data.status) ? data.status : undefined,
+            fileData: encoded
+          },
+          shouldPersistBytes
+        );
+      }
     },
     onError: (error) => {
       notifications.show({ title: 'Upload failed', message: error.message, color: 'red' });
@@ -125,7 +125,7 @@ export default function UploadPage() {
               <Switch
                 label="Cache upload for re-scan (stores file client-side)"
                 {...field}
-                disabled={mutation.isPending}
+                disabled={mutation.isPending || !config.featureHistory}
                 checked={field.value}
               />
             )}
@@ -159,4 +159,10 @@ export default function UploadPage() {
       </Card>
     </Stack>
   );
+}
+
+function isStatusTerminal(status?: string | null) {
+  if (!status) return false;
+  const normalized = status.toLowerCase();
+  return normalized === 'done' || normalized === 'done_with_errors' || normalized === 'error';
 }

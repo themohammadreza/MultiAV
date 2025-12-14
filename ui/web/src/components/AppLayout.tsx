@@ -9,7 +9,6 @@ import { PropsWithChildren } from 'react';
 const links = [
   { label: 'Upload', href: '/' },
   { label: 'Status', href: '/status' },
-  { label: 'Results', href: '/results/demo-job-id', description: 'Inspect latest job' },
   { label: 'History', href: '/history' }
 ];
 
@@ -43,7 +42,6 @@ export function AppLayout({ children }: PropsWithChildren) {
                 key={link.href}
                 href={link.href}
                 label={link.label}
-                description={link.description}
                 active={pathname === link.href}
               />
             ))}

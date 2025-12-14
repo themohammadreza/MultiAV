@@ -17,24 +17,24 @@ export default function HistoryPage() {
         <Stack>
           <Group justify="space-between">
             <Text fw={600}>Recent jobs (server)</Text>
-            <Badge>{data?.jobs.length ?? 0}</Badge>
+            <Badge>{data?.count ?? 0}</Badge>
           </Group>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Job ID</Table.Th>
-                <Table.Th>File</Table.Th>
                 <Table.Th>Status</Table.Th>
-                <Table.Th>Cached</Table.Th>
+                <Table.Th>Verdict</Table.Th>
+                <Table.Th>Severity</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {(data?.jobs ?? []).map((job) => (
+              {(data?.items ?? []).map((job) => (
                 <Table.Tr key={job.job_id} component={Link} href={`/results/${job.job_id}`}>
                   <Table.Td>{job.job_id}</Table.Td>
-                  <Table.Td>{job.filename}</Table.Td>
                   <Table.Td>{job.status}</Table.Td>
-                  <Table.Td>{job.cached ? 'yes' : 'no'}</Table.Td>
+                  <Table.Td>{job.verdict ?? 'pending'}</Table.Td>
+                  <Table.Td>{job.severity ?? 'n/a'}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

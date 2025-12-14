@@ -40,6 +40,7 @@ export default function StatusPage() {
               Open results
             </Button>
           </Group>
+          {query.validationError && <Text c="red">{query.validationError.message}</Text>}
           {query.error && <Text c="red">{query.error.message}</Text>}
           {query.data && (
             <Card withBorder>
@@ -49,11 +50,12 @@ export default function StatusPage() {
                   <Text>{query.data.status}</Text>
                 </Group>
                 <Text size="sm" c="dimmed">
-                  Submitted {new Date(query.data.submitted_at).toLocaleString()} • Cached: {query.data.cached ? 'yes' : 'no'}
+                  Started {query.data.started_at ? new Date(query.data.started_at).toLocaleString() : 'pending'}
                 </Text>
                 {query.data.completed_at && (
                   <Text size="sm">Completed {new Date(query.data.completed_at).toLocaleString()}</Text>
                 )}
+                {query.data.verdict && <Text size="sm">Verdict: {query.data.verdict}</Text>}
               </Stack>
             </Card>
           )}

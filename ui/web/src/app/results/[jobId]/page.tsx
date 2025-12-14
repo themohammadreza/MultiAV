@@ -10,6 +10,8 @@ export default function ResultPage() {
   const params = useParams<{ jobId: string }>();
   const query = useJobPolling(params?.jobId);
 
+  const engines = query.data?.details ? Object.entries(query.data.details) : [];
+
   return (
     <Stack gap="md">
       <Title order={2}>Results</Title>
@@ -26,38 +28,44 @@ export default function ResultPage() {
               <Badge color={isTerminal(query.data.status) ? 'green' : 'blue'}>{query.data.status}</Badge>
             </Group>
             <Text size="sm" c="dimmed">
-              Submitted {new Date(query.data.submitted_at).toLocaleString()} • Cached: {query.data.cached ? 'yes' : 'no'}
+              Started {query.data.started_at ? new Date(query.data.started_at).toLocaleString() : 'pending'}
             </Text>
+            {query.data.completed_at && (
+              <Text size="sm">Completed {new Date(query.data.completed_at).toLocaleString()}</Text>
+            )}
+            {query.data.verdict && <Text size="sm">Verdict: {query.data.verdict}</Text>}
             {query.data.details && (
-              <ScrollArea h={120} p="xs" type="auto">
+              <ScrollArea h={140} p="xs" type="auto">
                 <pre>{JSON.stringify(query.data.details, null, 2)}</pre>
               </ScrollArea>
             )}
-            <Stack gap="xs">
-              <Text fw={600}>Engines</Text>
-              <ScrollArea>
-                <Table striped highlightOnHover>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Engine</Table.Th>
-                      <Table.Th>Status</Table.Th>
-                      <Table.Th>Signature</Table.Th>
-                      <Table.Th>Message</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {query.data.engines.map((engine) => (
-                      <Table.Tr key={engine.engine}>
-                        <Table.Td>{engine.engine}</Table.Td>
-                        <Table.Td>{engine.status}</Table.Td>
-                        <Table.Td>{engine.signature ?? 'n/a'}</Table.Td>
-                        <Table.Td>{engine.message ?? '—'}</Table.Td>
+            {engines.length > 0 && (
+              <Stack gap="xs">
+                <Text fw={600}>Engines</Text>
+                <ScrollArea>
+                  <Table striped highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Engine</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Signature</Table.Th>
+                        <Table.Th>Message</Table.Th>
                       </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </ScrollArea>
-            </Stack>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {engines.map(([engine, detail]) => (
+                        <Table.Tr key={engine}>
+                          <Table.Td>{engine}</Table.Td>
+                          <Table.Td>{detail.status ?? 'unknown'}</Table.Td>
+                          <Table.Td>{detail.signature ?? 'n/a'}</Table.Td>
+                          <Table.Td>{detail.message ?? '—'}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Stack>
+            )}
           </Stack>
         </Card>
       )}
