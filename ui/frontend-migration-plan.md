@@ -34,11 +34,11 @@ This plan outlines the tasks required to migrate the existing Streamlit UI to a 
    - **Shared layout**: navigation, breadcrumbs, and responsive shell.
 
 5. **Data fetching and validation**
-   - Wire TanStack Query with polling/backoff for non-terminal jobs.
+   - Wire TanStack Query with polling/backoff for non-terminal jobs (done; polling now stops on terminal statuses and ignores window focus).
    - Use React Hook Form + Zod for upload validation and form states.
 
 6. **UX enhancements**
-   - Toasters for success/error, disabled states during uploads, skeletons/spinners, and inline result preview.
+   - Toasters for success/error, disabled states during uploads, skeletons/spinners, and inline result preview (upload page now renders live results below the form; signatures are flattened and labeled).
 
 7. **Re-scan flow**
    - Cache upload history (bounded) and support opt-in/out semantics for re-scan submissions.

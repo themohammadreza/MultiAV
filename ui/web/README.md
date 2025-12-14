@@ -1,6 +1,6 @@
 # MultiAV Frontend
 
-Next.js + TypeScript UI using Mantine and TanStack Query.
+Next.js + TypeScript UI using Mantine and TanStack Query. Uploads show inline results under the form, polling stops automatically once a job reaches a terminal state, and the results page shares the same summary layout with engine details and a JSON download action.
 
 ## Configuration
 - Copy `.env.example` to `.env.local` and adjust API base URL/timeouts.
@@ -15,7 +15,7 @@ Next.js + TypeScript UI using Mantine and TanStack Query.
 - `npm run test` – run unit tests
 
 ## Deployment
-The provided Dockerfile builds a standalone Next.js image. Inject environment variables at runtime (e.g., via `docker run -e NEXT_PUBLIC_API_BASE_URL=...`). Set `API_PROXY_TARGET=http://app:8000` (or your API host) when you want the container to reverse-proxy `/api/*` to the backend and avoid browser CORS.
+The provided Dockerfile builds a standalone Next.js image. Inject environment variables at runtime (e.g., via `docker run -e NEXT_PUBLIC_API_BASE_URL=...`). Set `API_PROXY_TARGET=http://app:8000` (or your API host) when you want the container to reverse-proxy `/api/*` to the backend and avoid browser CORS. The UI defaults to `/api/*` proxying in docker-compose.
 
 ### Running alongside the backend with Docker Compose
 - From the repo root: `docker-compose up --build frontend app worker redis postgres minio clamav windows-defender` (or simply `docker-compose up --build` to start everything).

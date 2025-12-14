@@ -58,7 +58,9 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
    curl http://localhost:8000/api/v1/results/<job_id>
    ```
    Or open `http://localhost:8000/docs` for Swagger UI.
-4. Open the Streamlit dashboard at `http://localhost:8501` to upload, monitor, and browse results without touching the raw APIs.
+4. Frontends:
+   - Streamlit dashboard at `http://localhost:8501` (legacy, still bundled).
+   - Next.js UI at `http://localhost:3000` with inline results after upload, live polling that stops at terminal status, and a richer results layout.
 
 **Conda users**: export a minimal environment spec from installed packages with:
 ```bash
@@ -109,13 +111,11 @@ conda env export --from-history > environment.yml
 - `GET /api/v1/ui/jobs/recent` — lightweight feed of recent jobs with status/verdict/severity and SHA256.
 - `GET /api/v1/ui/engines/active` — enumerates enabled engines with configured timeouts and weights.
 
-## Streamlit dashboard
-- Located at `ui/streamlit_app.py`; built into the standard image and served via `docker compose up` on port 8501.
-- Configure via environment or `st.secrets`:
-  - `API_BASE_URL` (defaults to `http://localhost:8000`)
-  - `POLL_INTERVAL`, `REQUEST_TIMEOUT`, `MAX_UPLOAD_MB`, `FEATURE_HISTORY`
-- Features: upload with size guard, live polling with per-engine table, aggregated results download, and a recent-history view backed by read-only endpoints.
-- To run locally without Docker: `streamlit run ui/streamlit_app.py` after installing `requirements.txt`.
+## Frontends
+- **Next.js UI** (recommended): `ui/web` served on port 3000 via compose. Inline results render under the upload form; polling stops automatically when a job hits a terminal status. The results page uses the same summary layout and a download JSON action.
+  - Env: `NEXT_PUBLIC_API_BASE_URL` (defaults to `/` with compose proxy), `API_PROXY_TARGET` for reverse proxy, `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB`, `NEXT_PUBLIC_FEATURE_HISTORY` (enables client-side caching of uploads in localStorage).
+  - Local dev: `npm run dev` inside `ui/web`; compose already injects proxy vars.
+- **Streamlit dashboard**: `ui/streamlit_app.py` on port 8501. Configure via env or `st.secrets` (`API_BASE_URL`, `POLL_INTERVAL`, `REQUEST_TIMEOUT`, `MAX_UPLOAD_MB`, `FEATURE_HISTORY`). Supports upload, live polling with per-engine table, results download, and recent history.
 
 ## Roadmap / still to build
 - Engine prioritization / smart scheduling policies.

@@ -79,5 +79,9 @@ Key storage settings:
 
 You can also open `http://localhost:8000/docs` and use the FastAPI Swagger UI to upload files through the interactive form, receive the returned UUIDs, and fetch results without crafting manual requests.
 
+## Frontend notes
+- Next.js UI (`ui/web`, port 3000) uses Mantine + TanStack Query. Uploads surface a live results panel beneath the form and stop polling once a terminal status is reached to avoid noisy refreshes. Signatures render flattened (no `[object Object]`).
+- Streamlit UI (`ui/streamlit_app.py`, port 8501) remains available for parity; polling is controlled via `POLL_INTERVAL`.
+
 ## Docker mirror for sanctioned regions
 Run `./setup-docker-mirror.sh` to rewrite `/etc/docker/daemon.json` (uses `sudo`) so Docker pulls via `https://registry.docker.ir` as both an insecure registry and registry mirror. The script restarts Docker automatically to apply the change. This helps work around Docker Hub sanctions/blocks.
