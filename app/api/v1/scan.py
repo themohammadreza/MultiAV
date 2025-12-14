@@ -56,3 +56,8 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             "status": "queued",
             "cached": False,
             }
+
+# Accept the route without a trailing slash to avoid redirects (important behind proxies).
+@router.post("", include_in_schema=False)
+async def upload_file_no_trailing(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    return await upload_file(file=file, db=db)

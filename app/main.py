@@ -1,6 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import results, scan, ui
 from app.services.storage import get_storage_service
@@ -27,6 +29,21 @@ app = FastAPI(
     title = "GreenWeb Multi-AV",
     version = "0.1.0",
     lifespan = lifespan
+)
+
+# Allow browser apps (Streamlit/Next) to call the API without CORS failures.
+cors_origins = os.getenv("CORS_ORIGINS")
+allowed_origins = (
+    [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+    if cors_origins
+    else ["*"]
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
 )
 
 app.include_router(scan.router, prefix="/api/v1/scan", tags=["Scan"])
