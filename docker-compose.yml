@@ -177,6 +177,22 @@ services:
         condition: service_started
     user: "1000:1000"
 
+  frontend:
+    build:
+      context: ./ui/web
+      dockerfile: Dockerfile
+    image: multiav-frontend:latest
+    container_name: multiav-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "/"
+      API_PROXY_TARGET: http://app:8000
+      NEXT_PUBLIC_FEATURE_HISTORY: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      app:
+        condition: service_started
+
 volumes:
   postgres-data:
   clamav-db:
