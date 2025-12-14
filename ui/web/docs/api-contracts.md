@@ -15,11 +15,11 @@
   - `families`, `primary_family`, `categories`, `signatures`
   - `details`: object keyed by engine name with vendor-specific fields (e.g., `status`, `signature`, `message`, `detected`, `scanned_at`)
 
-## GET /ui/jobs/recent
+## GET /api/v1/ui/jobs/recent
 - **Response** (`RecentJobsResponse`): `{ items: RecentJobItem[], count }` where each `RecentJobItem` has
   `job_id`, `status`, optional `verdict`, optional `severity`, optional `sha256`, `started_at`, optional `completed_at`.
 
-## GET /ui/engines/active
+## GET /api/v1/ui/engines/active
 - **Response** (`ActiveEnginesResponse`): `{ engines: { engine, timeout?, weight? }[] }`.
 
 These shapes are mirrored in `src/lib/api-types.ts` and consumed by `src/lib/api-client.ts`, enabling typed data access

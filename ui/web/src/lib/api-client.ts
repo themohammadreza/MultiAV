@@ -35,11 +35,11 @@ export async function fetchJobResult(jobId: string): Promise<ResultSummary> {
 }
 
 export async function fetchRecentJobs(): Promise<RecentJobsResponse> {
-  const response = await fetch(`${config.apiBaseUrl}/ui/jobs/recent`);
+  const response = await fetch(`${config.apiBaseUrl}/api/v1/ui/jobs/recent`);
   return handleResponse<RecentJobsResponse>(response);
 }
 
 export async function fetchActiveEngines(): Promise<ActiveEnginesResponse> {
-  const response = await fetch(`${config.apiBaseUrl}/ui/engines/active`);
+  const response = await fetch(`${config.apiBaseUrl}/api/v1/ui/engines/active`);
   return handleResponse<ActiveEnginesResponse>(response);
 }
