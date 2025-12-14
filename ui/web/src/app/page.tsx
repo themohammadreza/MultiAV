@@ -1,26 +1,37 @@
 'use client';
 
-import { ActionIcon, Badge, Button, Card, FileButton, Flex, Group, Paper, Stack, Switch, Text, Title } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, FileButton, Flex, Group, Loader, Paper, Stack, Switch, Text, Title } from '@mantine/core';
 import { IconUpload, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { notifications } from '@mantine/notifications';
 import { useMutation } from '@tanstack/react-query';
 import { addToHistory } from '@/lib/history-cache';
-import { submitScan } from '@/lib/api-client';
+import { isTerminal, submitScan } from '@/lib/api-client';
 import { loadConfig } from '@/lib/config';
 import { UploadFormValues, uploadFormSchema } from '@/lib/validators';
 import Link from 'next/link';
+import { useJobPolling } from '@/hooks/useJobPolling';
+import { ResultSummaryCard } from '@/components/ResultSummary';
 
 const config = loadConfig();
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const form = useForm<UploadFormValues>({
     resolver: zodResolver(uploadFormSchema),
     defaultValues: { cacheUpload: true }
   });
+  const jobQuery = useJobPolling(activeJobId || undefined);
+
+  // When upload starts, react-query will poll; when it finishes, keep the result shown.
+  useEffect(() => {
+    if (activeJobId && jobQuery.data?.job_id !== activeJobId && jobQuery.data?.job_id) {
+      setActiveJobId(jobQuery.data.job_id);
+    }
+  }, [activeJobId, jobQuery.data?.job_id]);
 
   const mutation = useMutation({
     mutationFn: async (values: UploadFormValues) => {
@@ -32,6 +43,7 @@ export default function UploadPage() {
     },
     onSuccess: async (data, variables) => {
       notifications.show({ title: 'Upload started', message: `Job ${data.job_id} ${data.status}`, color: 'blue' });
+      setActiveJobId(data.job_id);
       const shouldPersistBytes = variables.cacheUpload && config.featureHistory;
       let encoded: string | undefined;
       if (shouldPersistBytes && selectedFile) {
@@ -46,7 +58,7 @@ export default function UploadPage() {
             mimeType: selectedFile?.type ?? 'application/octet-stream',
             size: selectedFile?.size ?? 0,
             startedAt: data.scanned_at ?? new Date().toISOString(),
-            verdict: isStatusTerminal(data.status) ? data.status : undefined,
+            verdict: isTerminal(data.status) ? data.status : undefined,
             fileData: encoded
           },
           shouldPersistBytes
@@ -160,12 +172,31 @@ export default function UploadPage() {
           </Group>
         </Stack>
       </Card>
+
+      {activeJobId && (
+        <Card withBorder>
+          <Stack gap="sm">
+            <Group justify="space-between" align="center">
+              <Title order={4}>Latest results</Title>
+              <Badge color="gray">Job {activeJobId}</Badge>
+            </Group>
+            {jobQuery.isLoading || jobQuery.isFetching ? (
+              <Group gap="sm" align="center">
+                <Loader size="sm" />
+                <Text size="sm">Fetching status…</Text>
+              </Group>
+            ) : jobQuery.data ? (
+              <ResultSummaryCard summary={jobQuery.data} />
+            ) : jobQuery.error ? (
+              <Text c="red">Could not fetch status: {jobQuery.error.message}</Text>
+            ) : (
+              <Text size="sm" c="dimmed">
+                Waiting for status…
+              </Text>
+            )}
+          </Stack>
+        </Card>
+      )}
     </Stack>
   );
-}
-
-function isStatusTerminal(status?: string | null) {
-  if (!status) return false;
-  const normalized = status.toLowerCase();
-  return normalized === 'done' || normalized === 'done_with_errors' || normalized === 'error';
 }

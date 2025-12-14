@@ -213,20 +213,25 @@ def render_engine_table(details: Dict[str, Dict]) -> List[Dict[str, object]]:
 
 
 def render_summary(summary: Dict[str, object]) -> None:
+    st.header("Results")
     st.subheader("Overall verdict")
-    cols = st.columns(3)
-    cols[0].metric("Verdict", summary.get("verdict", "pending"))
-    cols[1].metric("Severity", summary.get("severity", "informational"))
-    cols[2].metric("Confidence", summary.get("confidence", 0))
 
-    st.write(
-        "Families:",
-        ", ".join(summary.get("families") or []) or "—",
-    )
+    verdict = summary.get("verdict", "pending")
+    severity = summary.get("severity", "informational")
+    confidence = summary.get("confidence", 0)
+
+    cols = st.columns(3)
+    cols[0].markdown("**Verdict**")
+    cols[0].markdown(f"### {verdict}")
+    cols[1].markdown("**Severity**")
+    cols[1].markdown(f"### {severity}")
+    cols[2].markdown("**Confidence**")
+    cols[2].markdown(f"### {confidence}")
+
+    st.write("Families:", ", ".join(summary.get("families") or []) or "—")
     st.write("Primary family:", summary.get("primary_family") or "—")
     st.write("Categories:", ", ".join(summary.get("categories") or []) or "—")
 
-    # API may send signatures as dicts; flatten to readable strings.
     signatures = summary.get("signatures") or []
     rendered_signatures = []
     for sig in signatures:
@@ -263,6 +268,10 @@ def upload_view(config: UIConfig) -> None:
     upload_key = f"uploader_{st.session_state.get('job_id', 'default')}"
     uploaded = st.file_uploader("Choose a file", type=None, key=upload_key)
     if not uploaded:
+        if st.session_state.get("job_id"):
+            st.divider()
+            st.subheader("Latest job status")
+            render_status_or_results(config, st.session_state["job_id"])
         return
 
     max_bytes = config.max_upload_mb * 1024 * 1024
@@ -303,22 +312,23 @@ def upload_view(config: UIConfig) -> None:
         })
         
         # Different messages for cached vs new
-        if response.get("cached"):
-            st.success(f"✅ Job `{response.get('job_id')}` submitted. Cached: True 📋 This file was scanned before. Navigate to Results tab to view cached results.")
-        else:
-            st.success(f"✅ Job `{response.get('job_id')}` submitted. Cached: False")
-        
-        # remove to fix unexpexted re-run:
-        #st.session_state["show_inline_results"] = True
-        st.rerun()  # Force controlled rerun to persist message
+        cached_flag = response.get("cached")
+        message = (
+            f"✅ Job `{response.get('job_id')}` submitted. Cached: True 📋 This file was scanned before."
+            if cached_flag
+            else f"✅ Job `{response.get('job_id')}` submitted. Cached: False"
+        )
+        st.session_state["upload_message"] = message
+        st.success(message)
 
     # Show live preview after upload
-    # remove to fix unexpexted re-run:
-    # if st.session_state.get("show_inline_results") and \
-    if st.session_state.get("job_id"):
+    job_id = st.session_state.get("job_id")
+    if job_id:
+        if st.session_state.get("upload_message"):
+            st.success(st.session_state["upload_message"])
         st.divider()
         st.subheader("Latest job status")
-        render_status_or_results(config, st.session_state["job_id"])
+        render_status_or_results(config, job_id)
 
 
 def status_view(config: UIConfig) -> None:
