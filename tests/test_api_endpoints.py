@@ -24,7 +24,7 @@ def api_key_header():
 
     db = SessionLocal()
     try:
-        db.add(APIKey(key_hash=key_hash, name="test-suite", rate_limit_per_minute=10_000))
+        db.add(APIKey(key_hash=key_hash, name="test-suite", rate_limit_per_day=10_000))
         db.commit()
     finally:
         db.close()

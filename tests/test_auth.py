@@ -14,7 +14,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def _create_test_key(*, name: str = "test", rate_limit_per_minute: int = 60) -> str:
+def _create_test_key(*, name: str = "test", rate_limit_per_day: int = 60) -> str:
     raw_key = secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
@@ -24,7 +24,7 @@ def _create_test_key(*, name: str = "test", rate_limit_per_minute: int = 60) -> 
             APIKey(
                 key_hash=key_hash,
                 name=name,
-                rate_limit_per_minute=rate_limit_per_minute,
+                rate_limit_per_day=rate_limit_per_day,
             )
         )
         db.commit()
@@ -40,7 +40,7 @@ def test_missing_api_key_returns_401(client: TestClient):
 
 
 def test_valid_api_key_allows_access(client: TestClient):
-    raw_key = _create_test_key(rate_limit_per_minute=10)
+    raw_key = _create_test_key(rate_limit_per_day=10)
     response = client.post(
         "/api/v1/scan/",
         files={"file": ("test.bin", b"data")},
@@ -50,10 +50,10 @@ def test_valid_api_key_allows_access(client: TestClient):
 
 
 def test_rate_limit_enforcement(client: TestClient):
-    raw_key = _create_test_key(rate_limit_per_minute=10)
+    raw_key = _create_test_key(rate_limit_per_day=10)
 
     last = None
-    for i in range(11):  # exceed 10/min
+    for i in range(11):  # exceed 10/day
         last = client.post(
             "/api/v1/scan/",
             files={"file": (f"file{i}.bin", b"data")},

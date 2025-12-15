@@ -33,7 +33,8 @@ def get_results(
     db: Session = Depends(get_db),
 ):
     redis_client = get_rate_limit_redis_client(settings.REDIS_URL)
-    check_rate_limit(api_key, redis_client)
+    # Results polling is intentionally not billed against the daily quota.
+    check_rate_limit(api_key, redis_client, consume=False)
 
     try:
         job_uuid = UUID(job_id)
