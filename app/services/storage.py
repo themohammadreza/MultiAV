@@ -307,3 +307,16 @@ def get_storage_service() -> StorageService:
 async def save_file(upload: UploadFile) -> Tuple[str, str]:
     service = get_storage_service()
     return await service.save_file(upload)
+
+
+async def compute_sha256(upload: UploadFile) -> str:
+    sha256 = hashlib.sha256()
+    try:
+        while True:
+            chunk = await upload.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            sha256.update(chunk)
+        return sha256.hexdigest()
+    finally:
+        await upload.seek(0)

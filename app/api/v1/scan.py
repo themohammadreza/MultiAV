@@ -5,7 +5,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 import pytz
 
-from app.services.storage import save_file
+from app.services.storage import compute_sha256, save_file
 from app.db.session import get_db
 from app.db.models import APIKey as APIKeyModel, File as FileModel, ScanJob
 from app.workers.tasks import run_scan
@@ -24,9 +24,8 @@ async def upload_file(
     db: Session = Depends(get_db),
 ):
     redis_client = get_rate_limit_redis_client(settings.REDIS_URL)
-    check_rate_limit(api_key, redis_client)
 
-    sha256, location = await save_file(file)
+    sha256 = await compute_sha256(file)
 
     iran_tz = pytz.timezone('Asia/Tehran')
 
@@ -45,6 +44,9 @@ async def upload_file(
             "cached": True,
             "scanned_at": first_scan.isoformat(),
         }
+
+    check_rate_limit(api_key, redis_client)
+    _, location = await save_file(file)
 
     # if it's a new file
     file_entry = FileModel(

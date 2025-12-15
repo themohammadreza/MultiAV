@@ -68,7 +68,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 
 ### Auth & quotas
 - Required headers: `X-API-Key` for `POST /api/v1/scan/` and `GET /api/v1/results/{job_id}`.
-- Daily quota: `rate_limit_per_day` controls how many `POST /scan` calls a key can make per day; results polling does not consume quota.
+- Daily quota: `rate_limit_per_day` controls how many **new** scans a key can start per day; cached scans and results polling do not consume quota.
 - Expiry: keys expire after `API_KEY_TTL_DAYS` (default 30). Renew with:
   ```bash
   docker compose exec app python scripts/manage_keys.py renew <name|uuid>

@@ -41,7 +41,7 @@ How it works:
 
 How it works:
 - Quotas are **per day** (`APIKey.rate_limit_per_day`).
-- `POST /api/v1/scan/` consumes quota (one request = one unit).
+- `POST /api/v1/scan/` consumes quota only for **new** scans (cached scans are free).
 - `GET /api/v1/results/{job_id}` is intentionally not consumed (polling is “free”).
 - Redis is used for counting when available; tests use an in-memory fallback.
 
@@ -193,4 +193,3 @@ docker compose down -v
 - Keep engine toggles and weights YAML-driven (no code edits required to enable/disable).
 - Add tests for behavior changes; prefer stubbing engines in tests (see `tests/utils.py`).
 - Avoid “polling costs quota” traps: results polling should remain cheap and safe.
-

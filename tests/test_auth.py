@@ -54,9 +54,10 @@ def test_rate_limit_enforcement(client: TestClient):
 
     last = None
     for i in range(11):  # exceed 10/day
+        payload = f"data-{i}".encode("utf-8")
         last = client.post(
             "/api/v1/scan/",
-            files={"file": (f"file{i}.bin", b"data")},
+            files={"file": (f"file{i}.bin", payload)},
             headers={"X-API-Key": raw_key},
         )
 
