@@ -1,13 +1,13 @@
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import cast, String
 
 from app.db.models import File, ScanJob
 from app.db.session import get_db
 from app.services.aggregator.summary import summarize_job
-from app.services.orchestrator.registry import get_active_engines
+from app.services.orchestrator import registry
 
 router = APIRouter()
 
@@ -29,17 +29,29 @@ def list_recent_jobs(
         .order_by(ScanJob.created_at.desc())
     )
 
+    job_uuid: UUID | None = None
+    if job_id:
+        try:
+            job_uuid = UUID(str(job_id))
+        except ValueError:
+            job_uuid = None
+
     if status:
         query = query.filter(ScanJob.status.ilike(f"%{status}%"))
     if sha256:
         query = query.filter(File.sha256.ilike(f"%{sha256}%"))
-    if job_id:
-        query = query.filter(cast(ScanJob.id, String).ilike(f"%{job_id}%"))
+    if job_uuid:
+        query = query.filter(ScanJob.id == job_uuid)
 
-    jobs: List[ScanJob] = query.limit(limit).all()
+    # Avoid dialect-specific UUID casting surprises (e.g. SQLite) by applying substring filters in Python.
+    fetch_limit = 200 if job_id and not job_uuid else limit
+    jobs: List[ScanJob] = query.limit(fetch_limit).all()
 
     items = []
     for job in jobs:
+        if job_id and not job_uuid and str(job_id).lower() not in str(job.id).lower():
+            continue
+
         summary = summarize_job(
             job,
             sorted(job.results, key=lambda r: r.scanned_at or job.created_at),
@@ -57,15 +69,17 @@ def list_recent_jobs(
                 "completed_at": summary.get("completed_at"),
             }
         )
+        if len(items) >= limit:
+            break
 
     return {"items": items, "count": len(items)}
 
 
 @router.get("/engines/active")
 def get_engines():
-    registry = get_active_engines()
+    engine_registry = registry.get_active_engines()
     engines = [
         {"engine": name, "timeout": meta.get("timeout"), "weight": meta.get("weight")}
-        for name, meta in sorted(registry.items())
+        for name, meta in sorted(engine_registry.items())
     ]
     return {"engines": engines}

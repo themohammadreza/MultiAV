@@ -54,6 +54,21 @@ def _serialize_engine_result(record) -> Dict:
     payload.setdefault("status", "ok" if record.status == "success" else "error")
     payload.setdefault("detected", False)
     payload.setdefault("confidence", 0.0)
+
+    severity = payload.get("severity")
+    if isinstance(severity, str):
+        severity = severity.strip().lower()
+    if severity not in SEVERITY_SCORES:
+        severity = "informational"
+    payload["severity"] = severity
+
+    severity_score = payload.get("severity_score")
+    try:
+        severity_score = float(severity_score) if severity_score is not None else None
+    except (TypeError, ValueError):
+        severity_score = None
+    payload["severity_score"] = severity_score if severity_score is not None else SEVERITY_SCORES[severity]
+
     payload["scanned_at"] = _to_iran_iso(record.scanned_at)
     return payload
 

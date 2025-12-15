@@ -211,3 +211,5 @@ storage/files/*
 
 **/__pycache__/
 **/test_clamav.py
+.vscode/
+ui/streamlit_app.py

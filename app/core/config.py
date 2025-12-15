@@ -18,6 +18,8 @@ class Settings:
     STORAGE_TTL_SECONDS: int = int(os.getenv("STORAGE_TTL_SECONDS", "180"))
     STORAGE_MAX_BYTES: int = int(os.getenv("STORAGE_MAX_BYTES", str(5 * 1024 * 1024)))
 
+    BYPASS_AUTH: bool = os.getenv("BYPASS_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
+
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://multiav_user:mohammad@localhost:5432/multiav_db"

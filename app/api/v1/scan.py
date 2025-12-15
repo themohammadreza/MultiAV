@@ -7,14 +7,25 @@ import pytz
 
 from app.services.storage import save_file
 from app.db.session import get_db
-from app.db.models import File as FileModel, ScanJob
+from app.db.models import APIKey as APIKeyModel, File as FileModel, ScanJob
 from app.workers.tasks import run_scan
+
+from app.core.config import settings
+from app.core.auth import get_current_api_key
+from app.core.rate_limit import check_rate_limit, get_rate_limit_redis_client
 
 
 router = APIRouter()
 
 @router.post("/")
-async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_file(
+    file: UploadFile = File(...),
+    api_key: APIKeyModel | None = Depends(get_current_api_key),
+    db: Session = Depends(get_db),
+):
+    redis_client = get_rate_limit_redis_client(settings.REDIS_URL)
+    check_rate_limit(api_key, redis_client)
+
     sha256, location = await save_file(file)
 
     iran_tz = pytz.timezone('Asia/Tehran')
@@ -59,5 +70,9 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 
 # Accept the route without a trailing slash to avoid redirects (important behind proxies).
 @router.post("", include_in_schema=False)
-async def upload_file_no_trailing(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    return await upload_file(file=file, db=db)
+async def upload_file_no_trailing(
+    file: UploadFile = File(...),
+    api_key: APIKeyModel | None = Depends(get_current_api_key),
+    db: Session = Depends(get_db),
+):
+    return await upload_file(file=file, api_key=api_key, db=db)

@@ -1,6 +1,7 @@
 import pytest
 
 pytest.importorskip("httpx")
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -46,7 +47,7 @@ def test_recent_jobs_filters_by_severity_and_job():
     job_id = seed_job(status="done")
     # inject a severity to test filter pass
     with SessionLocal() as session:
-        job = session.query(ScanJob).filter(ScanJob.id == job_id).first()
+        job = session.query(ScanJob).filter(ScanJob.id == uuid.UUID(job_id)).first()
         if job and job.results:
             job.results[0].result["severity"] = "high"
             session.commit()

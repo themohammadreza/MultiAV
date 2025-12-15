@@ -81,6 +81,7 @@ services:
       STORAGE_S3_ACCESS_KEY: multiav
       STORAGE_S3_SECRET_KEY: multiavsecret
       STORAGE_S3_USE_SSL: "false"
+      BYPASS_AUTH: "false"
     volumes:
       - ./config:/app/config:ro
     ports:
@@ -140,6 +141,7 @@ services:
       STORAGE_S3_ACCESS_KEY: multiav
       STORAGE_S3_SECRET_KEY: multiavsecret
       STORAGE_S3_USE_SSL: "false"
+      BYPASS_AUTH: "false"
     volumes:
       - ./config:/app/config:ro
     depends_on:
@@ -164,6 +166,7 @@ services:
     command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true"]
     environment:
       API_BASE_URL: http://app:8000
+      API_KEY: ${API_KEY:-}
       POLL_INTERVAL: 2
       REQUEST_TIMEOUT: 15
       MAX_UPLOAD_MB: 50

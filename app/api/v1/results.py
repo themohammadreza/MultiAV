@@ -3,7 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.models import ScanJob
+from app.core.auth import get_current_api_key
+from app.core.config import settings
+from app.core.rate_limit import check_rate_limit, get_rate_limit_redis_client
+from app.db.models import APIKey as APIKeyModel, ScanJob
 from app.db.session import get_db
 from app.services.aggregator.summary import summarize_job
 
@@ -24,7 +27,14 @@ NOT_FOUND_MESSAGE = (
         }
     },
 )
-def get_results(job_id: str, db: Session = Depends(get_db)):
+def get_results(
+    job_id: str,
+    api_key: APIKeyModel = Depends(get_current_api_key),
+    db: Session = Depends(get_db),
+):
+    redis_client = get_rate_limit_redis_client(settings.REDIS_URL)
+    check_rate_limit(api_key, redis_client)
+
     try:
         job_uuid = UUID(job_id)
     except ValueError:

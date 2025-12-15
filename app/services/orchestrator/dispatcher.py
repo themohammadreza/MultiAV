@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
+from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -13,16 +14,31 @@ from app.services.orchestrator.registry import get_active_engines
 logger = logging.getLogger(__name__)
 
 
-def _get_job(db: Session, job_id: str) -> Optional[ScanJob]:
+def _normalize_job_id(job_id: str | UUID) -> UUID | None:
+    try:
+        return job_id if isinstance(job_id, UUID) else UUID(str(job_id))
+    except Exception:
+        return None
+
+
+def _get_job(db: Session, job_id: str | UUID) -> Optional[ScanJob]:
     """Fetch a ScanJob by id without leaking session management."""
-    return db.query(ScanJob).filter(ScanJob.id == job_id).first()
+    normalized = _normalize_job_id(job_id)
+    if normalized is None:
+        return None
+    return db.query(ScanJob).filter(ScanJob.id == normalized).first()
 
 
 def mark_job_status(job_id: str, status: str, *, completed: bool = False) -> Optional[ScanJob]:
     """Update a job's status (and optionally completion timestamp)."""
+    normalized = _normalize_job_id(job_id)
+    if normalized is None:
+        logger.warning("Job %s has invalid UUID format", job_id)
+        return None
+
     db = SessionLocal()
     try:
-        job = _get_job(db, job_id)
+        job = _get_job(db, normalized)
         if not job:
             logger.warning("Job %s not found while setting status to %s", job_id, status)
             return None
@@ -43,13 +59,18 @@ def record_engine_result(job_id: str, engine: str, status: str, result: Dict) ->
 
     Returns True on success, False if persistence failed or job was missing.
     """
+    normalized = _normalize_job_id(job_id)
+    if normalized is None:
+        logger.warning("Dropping engine result for invalid job id %s (%s)", job_id, engine)
+        return False
+
     db = SessionLocal()
     try:
         payload = result or {}
         payload.setdefault("engine", engine)
         payload.setdefault("status", status)
 
-        job = _get_job(db, job_id)
+        job = _get_job(db, normalized)
         if not job:
             logger.warning("Dropping engine result for missing job %s (%s)", job_id, engine)
             return False
@@ -61,7 +82,7 @@ def record_engine_result(job_id: str, engine: str, status: str, result: Dict) ->
 
         existing = (
             db.query(EngineResult)
-            .filter(EngineResult.job_id == job_id, EngineResult.engine == engine)
+            .filter(EngineResult.job_id == normalized, EngineResult.engine == engine)
             .first()
         )
 
@@ -73,7 +94,7 @@ def record_engine_result(job_id: str, engine: str, status: str, result: Dict) ->
         try:
             db.add(
                 EngineResult(
-                    job_id=job_id,
+                    job_id=normalized,
                     engine=engine,
                     status=status,
                     result=payload,
@@ -86,7 +107,7 @@ def record_engine_result(job_id: str, engine: str, status: str, result: Dict) ->
             db.rollback()
             existing = (
                 db.query(EngineResult)
-                .filter(EngineResult.job_id == job_id, EngineResult.engine == engine)
+                .filter(EngineResult.job_id == normalized, EngineResult.engine == engine)
                 .first()
             )
             if existing:
@@ -110,9 +131,14 @@ def record_dispatch_error(job_id: str, message: str) -> None:
 
 def finalize_job_summary(job_id: str) -> Optional[dict]:
     """Mark job completion and return an aggregated summary."""
+    normalized = _normalize_job_id(job_id)
+    if normalized is None:
+        logger.warning("Attempted to finalize invalid job id %s", job_id)
+        return None
+
     db = SessionLocal()
     try:
-        job = _get_job(db, job_id)
+        job = _get_job(db, normalized)
         if not job:
             logger.warning("Attempted to finalize missing job %s", job_id)
             return None

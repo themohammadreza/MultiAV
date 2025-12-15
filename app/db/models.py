@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
 from datetime import datetime, timezone
@@ -42,7 +43,23 @@ class EngineResult(Base):
 
     engine = Column(String)
     status = Column(String)
-    result = Column(JSON)
+    result = Column(MutableDict.as_mutable(JSON))
     scanned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     job = relationship("ScanJob", back_populates="results")
+
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    key_hash = Column(String(64), unique=True, index=True, nullable=False)  # sha256 hash of the raw key
+    name = Column(String, nullable=False)  # e.g: frontend-service
+    rate_limit_per_minute = Column(
+        "rate_limit_per_miniute",
+        Integer,
+        nullable=False,
+        default=60,
+    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, default=True, nullable=False)

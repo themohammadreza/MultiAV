@@ -12,12 +12,21 @@ class APIConfig:
     base_url: str = "http://localhost:8000"
     timeout: float = 10.0
     poll_interval: float = 2.0
+    api_key: Optional[str] = None
+    api_key_header: str = "X-API-Key"
 
 
 class MultiAVClient:
     def __init__(self, config: APIConfig):
         self.config = config
-        self._client = httpx.Client(base_url=self.config.base_url, timeout=self.config.timeout)
+        headers: Dict[str, str] = {}
+        if self.config.api_key:
+            headers[self.config.api_key_header] = self.config.api_key
+        self._client = httpx.Client(
+            base_url=self.config.base_url,
+            timeout=self.config.timeout,
+            headers=headers,
+        )
 
     def close(self) -> None:
         self._client.close()

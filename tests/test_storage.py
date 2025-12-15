@@ -6,8 +6,11 @@ import pytest
 
 botocore_exceptions = pytest.importorskip("botocore.exceptions")
 ClientError = botocore_exceptions.ClientError
+botocore_config = pytest.importorskip("botocore.config")
+Config = botocore_config.Config
 boto3 = pytest.importorskip("boto3")
-mock_s3 = pytest.importorskip("moto").mock_s3
+moto = pytest.importorskip("moto")
+mock_s3 = getattr(moto, "mock_s3", None) or getattr(moto, "mock_aws")
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
