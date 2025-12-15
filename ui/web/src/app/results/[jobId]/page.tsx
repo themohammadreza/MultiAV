@@ -18,7 +18,7 @@ export default function ResultPage() {
           {query.error.message}
         </Alert>
       )}
-      {query.isLoading || query.isFetching ? (
+      {query.isLoading ? (
         <Card withBorder>
           <Stack align="center" gap="sm">
             <Loader size="sm" />
@@ -28,7 +28,14 @@ export default function ResultPage() {
           </Stack>
         </Card>
       ) : query.data ? (
-        <ResultSummaryCard summary={query.data} />
+        <Stack gap="xs">
+          {query.isFetching && (
+            <Text size="xs" c="dimmed">
+              Refreshing…
+            </Text>
+          )}
+          <ResultSummaryCard summary={query.data} />
+        </Stack>
       ) : (
         <Text size="sm" c="dimmed">
           No results yet.

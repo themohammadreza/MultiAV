@@ -2,7 +2,6 @@
 
 import { Badge, Button, Card, Divider, Group, ScrollArea, Stack, Table, Text, Title } from '@mantine/core';
 import type { ResultSummary as ResultSummaryData } from '@/lib/api-types';
-import { isTerminal } from '@/lib/api-client';
 
 interface Props {
   summary: ResultSummaryData;
@@ -49,7 +48,9 @@ function toTableRows(details: ResultSummaryData['details'] = {}) {
 
 export function ResultSummaryCard({ summary }: Props) {
   const rows = toTableRows(summary.details);
-  const badgeColor = isTerminal(summary.status) ? 'green' : 'blue';
+  const status = (summary.status || '').toLowerCase();
+  const badgeColor =
+    status === 'done' ? 'green' : status === 'done_with_errors' ? 'yellow' : status === 'error' ? 'red' : 'blue';
 
   return (
     <Stack gap="md">

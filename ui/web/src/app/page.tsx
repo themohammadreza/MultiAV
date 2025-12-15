@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { notifications } from '@mantine/notifications';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addToHistory } from '@/lib/history-cache';
 import { isTerminal, submitScan } from '@/lib/api-client';
 import { loadConfig } from '@/lib/config';
@@ -16,10 +16,22 @@ import { useJobPolling } from '@/hooks/useJobPolling';
 import { ResultSummaryCard } from '@/components/ResultSummary';
 
 const config = loadConfig();
+const MAX_CACHED_FILE_BYTES = 1024 * 1024; // localStorage is small; keep cached bytes conservative
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const form = useForm<UploadFormValues>({
     resolver: zodResolver(uploadFormSchema),
     defaultValues: { cacheUpload: true }
@@ -44,19 +56,28 @@ export default function UploadPage() {
     onSuccess: async (data, variables) => {
       notifications.show({ title: 'Upload started', message: `Job ${data.job_id} ${data.status}`, color: 'blue' });
       setActiveJobId(data.job_id);
+      queryClient.invalidateQueries({ queryKey: ['api-key-info'] });
       const shouldPersistBytes = variables.cacheUpload && config.featureHistory;
       let encoded: string | undefined;
-      if (shouldPersistBytes && selectedFile) {
-        const buffer = await selectedFile.arrayBuffer();
-        encoded = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      if (shouldPersistBytes && variables.file) {
+        if (variables.file.size > MAX_CACHED_FILE_BYTES) {
+          notifications.show({
+            title: 'Upload cached without bytes',
+            message: `File is ${(variables.file.size / (1024 * 1024)).toFixed(1)}MB; too large to store in browser storage.`,
+            color: 'yellow'
+          });
+        } else {
+          const buffer = await variables.file.arrayBuffer();
+          encoded = arrayBufferToBase64(buffer);
+        }
       }
       if (config.featureHistory) {
         addToHistory(
           {
             jobId: data.job_id,
-            fileName: selectedFile?.name ?? 'unknown',
-            mimeType: selectedFile?.type ?? 'application/octet-stream',
-            size: selectedFile?.size ?? 0,
+            fileName: variables.file?.name ?? 'unknown',
+            mimeType: variables.file?.type ?? 'application/octet-stream',
+            size: variables.file?.size ?? 0,
             startedAt: data.scanned_at ?? new Date().toISOString(),
             verdict: isTerminal(data.status) ? data.status : undefined,
             fileData: encoded
@@ -180,13 +201,20 @@ export default function UploadPage() {
               <Title order={4}>Latest results</Title>
               <Badge color="gray">Job {activeJobId}</Badge>
             </Group>
-            {jobQuery.isLoading || jobQuery.isFetching ? (
+            {jobQuery.isLoading ? (
               <Group gap="sm" align="center">
                 <Loader size="sm" />
                 <Text size="sm">Fetching status…</Text>
               </Group>
             ) : jobQuery.data ? (
-              <ResultSummaryCard summary={jobQuery.data} />
+              <Stack gap="xs">
+                {jobQuery.isFetching && (
+                  <Text size="xs" c="dimmed">
+                    Refreshing…
+                  </Text>
+                )}
+                <ResultSummaryCard summary={jobQuery.data} />
+              </Stack>
             ) : jobQuery.error ? (
               <Text c="red">Could not fetch status: {jobQuery.error.message}</Text>
             ) : (
