@@ -1,5 +1,7 @@
 MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It ingests files over HTTP, runs them through multiple AV/static-analysis engines, normalizes the outputs, and returns a single aggregated verdict with per-engine details.
 
+For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
+
 ## Final goal
 - Ship a production-ready, horizontally scalable multi-engine scanner with pluggable engines, weighted aggregation, and simple ops (one-command docker-compose for local, K8s-ready later).
 - Let operators toggle engines and tune weights from config without code edits.
@@ -15,6 +17,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
   - Windows Defender via `malice/windows-defender`
 - **Aggregation (`app/services/aggregator/*`)**: normalizes engine payloads, applies weights, derives verdict/severity/confidence, and infers families/categories.
 - **Persistence**: PostgreSQL for metadata (files, jobs, engine results), Redis for Celery broker/result backend, and pluggable storage backends. Use S3/MinIO object storage for uploaded binaries with TTL/size-cap cleanup (default via `docker-compose`), or fallback to local filesystem in single-container dev setups.
+- **Auth & quotas**: `X-API-Key` auth with optional `BYPASS_AUTH=true` for local development; daily quotas and 30-day key expiry.
 - **Workers**: Celery runs with a thread pool (`--pool=threads`, concurrency 4, prefetch 1) to better handle the IO-bound AV engines without process churn.
 - **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, Windows Defender, and MinIO wired together with healthchecks. Config is still mounted read-only; file-sharing volumes are no longer required between API/worker.
 
@@ -32,7 +35,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 - `config/engines.yaml` — enable/disable engines and tune weights/timeouts.
 - `docker-compose.yml` — local stack definition; includes MinIO for object storage and mounts `./config` into app/worker.
 - `Dockerfile` — app image builder used by API and worker services.
-- `technical-docs.md` — deeper, lower-level technical notes.
+- `CONTRIBUTERS_GUIDE.md` — how the pieces fit together, invariants, and best practices for changes.
 - `tests/` — starting point for automated coverage (extend here as you add features).
 - `setup-docker-mirror.sh` — optional helper to point Docker at an alternate registry mirror (uses sudo).
 
@@ -40,7 +43,7 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
 ### Prerequisites
 - Docker and Docker Compose
 - ~8 GB free disk for images (ClamAV DB + Windows Defender image are chunky)
-- Ports free: 8000 (API), 3310 (ClamAV), 3993 (Windows Defender), 55432 (Postgres), 6380 (Redis)
+- Ports free: 3000 (UI), 8000 (API), 3310 (ClamAV), 3993 (Windows Defender), 9000/9001 (MinIO), 55432 (Postgres), 6380 (Redis)
 
 ### Quick start
 1. From the repo root, build and launch everything:
@@ -48,18 +51,29 @@ MultiAV is a FastAPI + Celery powered multi-engine malware scanning service. It 
    docker compose up --build
    ```
    This starts Postgres, Redis, ClamAV, Windows Defender, the FastAPI app, and the Celery worker.
-2. Upload a file:
+2. Create an API key (required by default):
    ```bash
-   curl -F "file=@/path/to/sample.bin" http://localhost:8000/api/v1/scan/
+   docker compose exec app python scripts/manage_keys.py create dev 50
    ```
-   Note the returned `job_id`.
-3. Poll results:
-   ```bash
-   curl http://localhost:8000/api/v1/results/<job_id>
-   ```
+   Copy the printed `API Key: ...` value.
+3. Use the key:
+   - UI: open `http://localhost:3000`, click the key icon, paste the key.
+   - curl:
+     ```bash
+     curl -H "X-API-Key: <your-key>" -F "file=@/path/to/sample.bin" http://localhost:8000/api/v1/scan/
+     curl -H "X-API-Key: <your-key>" http://localhost:8000/api/v1/results/<job_id>
+     ```
    Or open `http://localhost:8000/docs` for Swagger UI.
-4. Frontend:
-   - Next.js UI at `http://localhost:3000` with inline results after upload, live polling that stops at terminal status, and a richer results layout.
+4. Frontend: Next.js UI runs at `http://localhost:3000` with inline results and polling that stops at terminal status.
+
+### Auth & quotas
+- Required headers: `X-API-Key` for `POST /api/v1/scan/` and `GET /api/v1/results/{job_id}`.
+- Daily quota: `rate_limit_per_day` controls how many `POST /scan` calls a key can make per day; results polling does not consume quota.
+- Expiry: keys expire after `API_KEY_TTL_DAYS` (default 30). Renew with:
+  ```bash
+  docker compose exec app python scripts/manage_keys.py renew <name|uuid>
+  ```
+- Local dev bypass: set `BYPASS_AUTH=true` for `app` and `worker` in `docker-compose.yml` (do not use in production).
 
 **Conda users**: export a minimal environment spec from installed packages with:
 ```bash
@@ -121,4 +135,4 @@ conda env export --from-history > environment.yml
 - Production-grade health monitoring, metrics, and structured logging across services.
 - Hardened retries/backoff per engine and clearer error surfacing.
 - CI/CD with automated tests, linting, and sample corpus regression runs.
-- Optional auth/rate limiting on the API and per-tenant quotas.
+- Billing/subscriptions integration and an operator/admin key management surface.
