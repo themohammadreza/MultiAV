@@ -1,6 +1,6 @@
 # Frontend Migration Plan
 
-This plan outlines the tasks required to migrate the existing Streamlit UI to a scalable React/TypeScript application using Next.js, Mantine, and TanStack Query.
+This plan outlines the tasks required to deliver a scalable React/TypeScript application using Next.js, Mantine, and TanStack Query.
 
 ## Stack and Design System
 - **Framework**: Next.js with TypeScript

@@ -31,7 +31,7 @@ app = FastAPI(
     lifespan = lifespan
 )
 
-# Allow browser apps (Streamlit/Next) to call the API without CORS failures.
+# Allow browser apps (e.g., the Next.js UI) to call the API without CORS failures.
 cors_origins = os.getenv("CORS_ORIGINS")
 allowed_origins = (
     [origin.strip() for origin in cors_origins.split(",") if origin.strip()]

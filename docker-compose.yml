@@ -157,29 +157,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  streamlit:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: multiav-app:latest
-    container_name: multiav-streamlit
-    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true"]
-    environment:
-      API_BASE_URL: http://app:8000
-      API_KEY: ${API_KEY:-}
-      POLL_INTERVAL: 2
-      REQUEST_TIMEOUT: 15
-      MAX_UPLOAD_MB: 50
-      FEATURE_HISTORY: "true"
-      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
-      PYTHONPATH: /app
-    ports:
-      - "8501:8501"
-    depends_on:
-      app:
-        condition: service_started
-    user: "1000:1000"
-
   frontend:
     build:
       context: ./ui/web
