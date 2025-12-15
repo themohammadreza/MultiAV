@@ -112,7 +112,6 @@ export default function UploadPage() {
                     setSelectedFile(file);
                     field.onChange(file);
                   }}
-                  accept="application/octet-stream,text/plain,application/zip"
                 >
                   {(props) => (
                     <Button leftSection={<IconUpload size={16} />} variant="light" {...props} disabled={mutation.isPending}>
