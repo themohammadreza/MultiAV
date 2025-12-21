@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional, TypedDict, Union
 from app.services.orchestrator.loader import EngineConfigError, load_engine_config
 
 EngineRunner = Callable[[str], dict]
+logger = logging.getLogger(__name__)
 
 
 class _LazyEngineRunner:
@@ -31,13 +32,19 @@ class _LazyEngineRunner:
             logger.warning("Engine module %s missing %s callable", self.module_path, self.attr)
         return self._runner
 
+    def warm_up(self) -> bool:
+        """Eagerly import the engine module so expensive setup (e.g. YARA compile) happens at startup."""
+        try:
+            return self._load() is not None
+        except Exception:  # noqa: BLE001 - warm-up should never crash startup
+            logger.exception("Failed to warm up engine module %s", self.module_path)
+            return False
+
     def __call__(self, file_path: str) -> dict:
         runner = self._load()
         if not runner:
             raise RuntimeError(f"Engine runner unavailable for {self.module_path}")
         return runner(file_path)
-
-logger = logging.getLogger(__name__)
 
 
 class EngineDefinition(TypedDict):
@@ -137,6 +144,19 @@ def get_active_engines(config_path: Optional[Union[str, Path]] = None) -> Dict[s
         return _default_registry()
 
     return registry
+
+
+def warm_up_active_engines(config_path: Optional[Union[str, Path]] = None) -> Dict[str, bool]:
+    """Eagerly import active engines so expensive module-level work is done during startup."""
+    warmed: Dict[str, bool] = {}
+    registry = get_active_engines(config_path)
+    for name, meta in registry.items():
+        runner = meta.get("runner")
+        if isinstance(runner, _LazyEngineRunner):
+            warmed[name] = runner.warm_up()
+        else:
+            warmed[name] = True
+    return warmed
 
 
 def get_engine_weights(

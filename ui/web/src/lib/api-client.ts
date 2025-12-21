@@ -78,3 +78,8 @@ export async function fetchApiKeyStatus(): Promise<ApiKeyStatusResponse> {
   const response = await fetch(`${apiBase}/api/v1/ui/api-key`, { headers: authHeaders() });
   return handleResponse<ApiKeyStatusResponse>(response);
 }
+
+export async function fetchHealth(): Promise<{ status: string }> {
+  const response = await fetch(`${apiBase}/api/v1/health`, { headers: authHeaders() });
+  return handleResponse<{ status: string }>(response);
+}

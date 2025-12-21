@@ -1,18 +1,11 @@
+import httpx
 import pytest
-
-pytest.importorskip("httpx")
 import uuid
-
-from fastapi.testclient import TestClient
 
 from app.db.models import EngineResult, File, ScanJob
 from app.db.session import SessionLocal
-from app.main import app
 from app.services.orchestrator.registry import AVAILABLE_ENGINES
 from tests.utils import configure_stub_engines
-
-
-client = TestClient(app)
 
 
 def seed_job(status: str = "done") -> str:
@@ -32,7 +25,7 @@ def seed_job(status: str = "done") -> str:
     return job_id
 
 
-def test_recent_jobs_returns_summary():
+def test_recent_jobs_returns_summary(client: httpx.Client):
     job_id = seed_job()
     response = client.get("/api/v1/ui/jobs/recent")
     assert response.status_code == 200
@@ -43,7 +36,7 @@ def test_recent_jobs_returns_summary():
     assert payload["items"][0]["sha256"] == "abc123"
 
 
-def test_recent_jobs_filters_by_severity_and_job():
+def test_recent_jobs_filters_by_severity_and_job(client: httpx.Client):
     job_id = seed_job(status="done")
     # inject a severity to test filter pass
     with SessionLocal() as session:
@@ -60,7 +53,7 @@ def test_recent_jobs_filters_by_severity_and_job():
     assert items[0]["job_id"] == job_id
 
 
-def test_active_engines_uses_registry(monkeypatch):
+def test_active_engines_uses_registry(monkeypatch, client: httpx.Client):
     configure_stub_engines(
         monkeypatch,
         {"stub": {"runner": AVAILABLE_ENGINES["clamav"], "timeout": 7, "weight": 2.0}},
@@ -70,3 +63,9 @@ def test_active_engines_uses_registry(monkeypatch):
     assert response.status_code == 200
     engines = response.json()["engines"]
     assert any(e["engine"] == "stub" and e["timeout"] == 7 and e["weight"] == 2.0 for e in engines)
+
+
+def test_health_endpoint(client: httpx.Client):
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json().get("status") == "ok"

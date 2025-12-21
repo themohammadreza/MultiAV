@@ -2,16 +2,10 @@ import hashlib
 import secrets
 
 import pytest
-from fastapi.testclient import TestClient
+import httpx
 
 from app.db.models import APIKey
 from app.db.session import SessionLocal
-from app.main import app
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 def _create_test_key(*, name: str = "test", rate_limit_per_day: int = 60) -> str:
@@ -34,12 +28,12 @@ def _create_test_key(*, name: str = "test", rate_limit_per_day: int = 60) -> str
     return raw_key
 
 
-def test_missing_api_key_returns_401(client: TestClient):
+def test_missing_api_key_returns_401(client: httpx.Client):
     response = client.post("/api/v1/scan/", files={"file": ("test.bin", b"data")})
     assert response.status_code == 401
 
 
-def test_valid_api_key_allows_access(client: TestClient):
+def test_valid_api_key_allows_access(client: httpx.Client):
     raw_key = _create_test_key(rate_limit_per_day=10)
     response = client.post(
         "/api/v1/scan/",
@@ -49,7 +43,7 @@ def test_valid_api_key_allows_access(client: TestClient):
     assert response.status_code == 200
 
 
-def test_rate_limit_enforcement(client: TestClient):
+def test_rate_limit_enforcement(client: httpx.Client):
     raw_key = _create_test_key(rate_limit_per_day=10)
 
     last = None

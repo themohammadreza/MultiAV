@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PropsWithChildren, useEffect, useState } from 'react';
 import { clearApiKey, getApiKey, setApiKey } from '@/lib/api-key';
-import { fetchApiKeyStatus } from '@/lib/api-client';
+import { fetchApiKeyStatus, fetchHealth } from '@/lib/api-client';
 
 const links = [
   { label: 'Upload', href: '/' },
@@ -29,13 +29,33 @@ export function AppLayout({ children }: PropsWithChildren) {
   }, []);
 
   const hasApiKey = Boolean(storedApiKey);
+  const health = useQuery({
+    queryKey: ['health'],
+    queryFn: fetchHealth,
+    retry: true,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
+    staleTime: 5_000
+  });
+  const healthReady = health.data?.status === 'ok';
   const apiKeyStatus = useQuery({
     queryKey: ['api-key-info'],
     queryFn: fetchApiKeyStatus,
-    enabled: hasApiKey,
+    enabled: hasApiKey && healthReady,
     refetchOnWindowFocus: false,
     staleTime: 30_000
   });
+
+  const quotaParts =
+    hasApiKey && apiKeyStatus.data && !apiKeyStatus.data.bypassed
+      ? [
+          apiKeyStatus.data.name?.trim(),
+          `${apiKeyStatus.data.days_remaining ?? 0} day(s) left`,
+          apiKeyStatus.data.requests_remaining_today == null
+            ? 'unlimited requests today'
+            : `${apiKeyStatus.data.requests_remaining_today} request(s) left today`
+        ].filter((part): part is string => Boolean(part))
+      : null;
 
   return (
     <AppShell
@@ -117,14 +137,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                 <IconKey size={18} />
               </ActionIcon>
             </Group>
-            {hasApiKey && apiKeyStatus.data && !apiKeyStatus.data.bypassed && (
-              <Text size="xs" c="dimmed">
-                {apiKeyStatus.data.days_remaining ?? 0} day(s) left •{' '}
-                {apiKeyStatus.data.requests_remaining_today == null
-                  ? 'unlimited requests today'
-                  : `${apiKeyStatus.data.requests_remaining_today} request(s) left today`}
-              </Text>
-            )}
+            {quotaParts && <Text size="xs" c="dimmed">{quotaParts.join(' • ')}</Text>}
             {hasApiKey && apiKeyStatus.isError && (
               <Text size="xs" c="red">
                 {apiKeyStatus.error.message}
@@ -148,7 +161,20 @@ export function AppLayout({ children }: PropsWithChildren) {
           </Stack>
         </AppShell.Section>
       </AppShell.Navbar>
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main>
+        {!healthReady ? (
+          <Stack align="center" mt="md" gap="xs">
+            <Text>Warming up the server… please wait.</Text>
+            {health.isError && (
+              <Text size="sm" c="red">
+                {health.error instanceof Error ? health.error.message : 'Server is starting up'}
+              </Text>
+            )}
+          </Stack>
+        ) : (
+          children
+        )}
+      </AppShell.Main>
     </AppShell>
   );
 }

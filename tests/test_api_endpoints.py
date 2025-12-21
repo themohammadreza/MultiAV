@@ -3,19 +3,12 @@ import secrets
 import time
 
 import pytest
-
-pytest.importorskip("httpx")
-from fastapi.testclient import TestClient
+import httpx
 
 from app.db.models import APIKey
 from app.db.session import SessionLocal
-from app.main import app
 from tests.utils import configure_stub_engines
 
-
-@pytest.fixture
-def client():
-    return TestClient(app)
 
 @pytest.fixture
 def api_key_header():
@@ -34,7 +27,7 @@ def api_key_header():
 
 
 @pytest.mark.integration
-def test_upload_scan_retrieve_flow(monkeypatch, client, api_key_header, celery_worker_instance):
+def test_upload_scan_retrieve_flow(monkeypatch, client: httpx.Client, api_key_header, celery_worker_instance):
     def ok_runner(path: str):  # noqa: ARG001
         return {"engine": "api-test", "status": "ok", "detected": False, "verdict": "clean"}
 
