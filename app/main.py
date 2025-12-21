@@ -1,11 +1,15 @@
 import os
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import results, scan, ui
+from app.services.orchestrator.registry import warm_up_active_engines
 from app.services.storage import get_storage_service
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,6 +26,15 @@ async def lifespan(app: FastAPI):
             storage.migrate_local_files(db)
         finally:
             db.close()
+
+    warm_ups = warm_up_active_engines()
+    if warm_ups:
+        warmed = [name for name, ok in warm_ups.items() if ok]
+        failed = [name for name, ok in warm_ups.items() if not ok]
+        if warmed:
+            logger.info("Warm-started engines: %s", ", ".join(sorted(warmed)))
+        if failed:
+            logger.warning("Engine warm-up failed: %s", ", ".join(sorted(failed)))
     yield
 
 
