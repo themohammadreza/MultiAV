@@ -14,6 +14,7 @@ RUN set -eux; \
         libssl-dev \
         libffi-dev \
         libmagic1 \
+        curl \
     || { \
         apt-get clean; \
         rm -rf /var/lib/apt/lists/*; \

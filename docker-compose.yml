@@ -97,6 +97,13 @@ services:
         condition: service_started
       minio:
         condition: service_healthy
+      
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   minio:
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z
@@ -173,7 +180,7 @@ services:
       - "3000:3000"
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres-data:
