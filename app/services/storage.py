@@ -283,8 +283,14 @@ class StorageService:
         """Best-effort background cleanup after TTL passes, even if no new uploads arrive."""
         if self.backend != "s3":
             return
-        if self._cleanup_timer and self._cleanup_timer.is_alive():
-            return
+        if self._cleanup_timer:
+            try:
+                if self._cleanup_timer.is_alive():
+                    self._cleanup_timer.cancel()
+            except Exception as exc:  # noqa: BLE001 - cancellation should not block scheduling
+                logger.warning("Failed to cancel existing cleanup timer: %s", exc)
+            finally:
+                self._cleanup_timer = None
         try:
             timer = threading.Timer(self.object_ttl_seconds, self._cleanup_bucket)
             timer.daemon = True

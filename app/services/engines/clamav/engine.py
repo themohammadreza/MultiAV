@@ -1,7 +1,9 @@
 import clamd
 import os
-import time
 import sys
+import tempfile
+import time
+from pathlib import Path
 
 # Prefer TCP host:port when set (for container-to-container connections), otherwise fallback to local socket.
 DEFAULT_SOCKET = os.getenv("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl")
@@ -58,6 +60,24 @@ def get_connection(max_retries: int = 5, delay_seconds: int = 2):
 
     raise RuntimeError(f"Failed to connect to clamd: {last_exc}")
 
+
+def _is_safe_path(file_path: Path) -> bool:
+    """Ensure the target file is within an expected directory to avoid traversal."""
+    try:
+        resolved = file_path.resolve()
+    except Exception:
+        return False
+
+    allowed_roots = {Path(tempfile.gettempdir()).resolve()}
+    storage_root = os.getenv("STORAGE_PATH", "storage/files")
+    try:
+        allowed_roots.add(Path(storage_root).resolve())
+    except Exception:
+        # If the storage path is invalid, fall back to temp-only allowlist
+        pass
+
+    return any(resolved == root or root in resolved.parents for root in allowed_roots)
+
 def _parse_response(response, start_time: float):
     scan_time_ms = int((time.time() - start_time) * 1000)
     status, signature = response.get('stream', (None, None))
@@ -107,7 +127,28 @@ def run(file_path: str):
     Returns normalized result dict per schema.py format
     """
     start_time = time.time()
-    FILE_PATH = os.path.abspath(file_path)
+    path_obj = Path(file_path)
+    if not _is_safe_path(path_obj):
+        return normalize_engine_result(
+            engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="error",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="informational",
+            confidence=0.0,
+            duration_ms=0,
+            error=f"Unsafe file path provided: {path_obj}",
+            details={
+                "version": DEFAULT_VERSION,
+                "scan_time_ms": 0,
+            },
+        )
+
+    FILE_PATH = str(path_obj.resolve())
 
     if not os.path.exists(FILE_PATH):
         return normalize_engine_result(

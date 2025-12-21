@@ -72,3 +72,46 @@ def test_save_file_delegates_to_service(monkeypatch):
 
     assert result == ("digest", "location")
     assert calls["called_with"] == "payload"
+
+
+@pytest.mark.unit
+def test_schedule_ttl_cleanup_replaces_existing_timer(monkeypatch):
+    class FakeTimer:
+        def __init__(self, interval, func):  # noqa: ANN001 - signature matches threading.Timer
+            self.interval = interval
+            self.func = func
+            self.started = False
+            self.cancelled = False
+
+        def start(self):
+            self.started = True
+
+        def cancel(self):
+            self.cancelled = True
+
+        def is_alive(self):
+            return self.started and not self.cancelled
+
+    created: list[FakeTimer] = []
+
+    def fake_timer(interval, func):  # noqa: ANN001 - test double
+        timer = FakeTimer(interval, func)
+        created.append(timer)
+        return timer
+
+    svc = storage.StorageService.__new__(storage.StorageService)
+    svc.backend = "s3"
+    svc.object_ttl_seconds = 5
+    svc._cleanup_bucket = lambda: None  # noqa: E731 - simple stub
+    existing = FakeTimer(10, lambda: None)
+    existing.start()
+    svc._cleanup_timer = existing
+
+    monkeypatch.setattr(storage.threading, "Timer", fake_timer)
+
+    svc._schedule_ttl_cleanup()
+
+    assert existing.cancelled is True
+    assert created, "A new cleanup timer should be scheduled"
+    assert created[0].started is True
+    assert svc._cleanup_timer is created[0]

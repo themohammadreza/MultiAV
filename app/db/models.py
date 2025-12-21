@@ -56,7 +56,7 @@ class APIKey(Base):
     key_hash = Column(String(64), unique=True, index=True, nullable=False)  # sha256 hash of the raw key
     name = Column(String, nullable=False)  # e.g: frontend-service
     rate_limit_per_day = Column(
-        "rate_limit_per_miniute",
+        "rate_limit_per_day",
         Integer,
         nullable=False,
         default=60,
