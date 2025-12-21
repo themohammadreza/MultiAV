@@ -133,7 +133,7 @@ def run_scan(job_id: str, file_location: str, file_path: str | None = None):
 
     for name, definition in engine_registry.items():
         timeout = int(definition.get("timeout", DEFAULT_ENGINE_TIMEOUT) or DEFAULT_ENGINE_TIMEOUT)
-        sig = run_engine_task.s(job_id=job_id, file_path=file_location, engine_name=name, timeout=timeout)
+        sig = run_engine_task.s(job_id=job_id, file_path=file_on_disk, engine_name=name, timeout=timeout)
         sig = sig.set(soft_time_limit=timeout, time_limit=timeout + TIME_LIMIT_GRACE_SECONDS)
         engine_tasks.append(sig)
 

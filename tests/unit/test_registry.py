@@ -116,3 +116,46 @@ def test_lazy_engine_failure_surfaces_on_invocation(monkeypatch):
     assert "missing" in engines
     with pytest.raises(RuntimeError):
         engines["missing"]["runner"]("dummy-path")
+
+
+@pytest.mark.unit
+def test_warm_up_active_engines_eagerly_imports_lazy_runner(monkeypatch):
+    class RecordingLazy(registry._LazyEngineRunner):
+        def __init__(self):
+            super().__init__("app.services.engines.yara.yara")
+            self.load_calls = 0
+
+        def _load(self):
+            self.load_calls += 1
+            return lambda path: {"status": "ok"}
+
+    runner = RecordingLazy()
+    monkeypatch.setattr(registry, "AVAILABLE_ENGINES", {"yara": runner})
+    monkeypatch.setattr(
+        registry, "load_engine_config", lambda path=None: {"engines": {"yara": {"enabled": True}}}
+    )
+
+    warm_up_result = registry.warm_up_active_engines()
+
+    assert warm_up_result == {"yara": True}
+    assert runner.load_calls == 1
+
+
+@pytest.mark.unit
+def test_warm_up_active_engines_handles_load_failures(monkeypatch):
+    class FailingLazy(registry._LazyEngineRunner):
+        def __init__(self):
+            super().__init__("app.services.engines.yara.yara")
+
+        def _load(self):  # pragma: no cover - invoked indirectly
+            raise RuntimeError("boom")
+
+    runner = FailingLazy()
+    monkeypatch.setattr(registry, "AVAILABLE_ENGINES", {"yara": runner})
+    monkeypatch.setattr(
+        registry, "load_engine_config", lambda path=None: {"engines": {"yara": {"enabled": True}}}
+    )
+
+    warm_up_result = registry.warm_up_active_engines()
+
+    assert warm_up_result == {"yara": False}

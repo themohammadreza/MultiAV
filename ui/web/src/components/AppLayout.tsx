@@ -37,6 +37,17 @@ export function AppLayout({ children }: PropsWithChildren) {
     staleTime: 30_000
   });
 
+  const quotaParts =
+    hasApiKey && apiKeyStatus.data && !apiKeyStatus.data.bypassed
+      ? [
+          apiKeyStatus.data.name?.trim(),
+          `${apiKeyStatus.data.days_remaining ?? 0} day(s) left`,
+          apiKeyStatus.data.requests_remaining_today == null
+            ? 'unlimited requests today'
+            : `${apiKeyStatus.data.requests_remaining_today} request(s) left today`
+        ].filter((part): part is string => Boolean(part))
+      : null;
+
   return (
     <AppShell
       header={{ height: 60 }}
@@ -117,14 +128,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                 <IconKey size={18} />
               </ActionIcon>
             </Group>
-            {hasApiKey && apiKeyStatus.data && !apiKeyStatus.data.bypassed && (
-              <Text size="xs" c="dimmed">
-                {apiKeyStatus.data.days_remaining ?? 0} day(s) left •{' '}
-                {apiKeyStatus.data.requests_remaining_today == null
-                  ? 'unlimited requests today'
-                  : `${apiKeyStatus.data.requests_remaining_today} request(s) left today`}
-              </Text>
-            )}
+            {quotaParts && <Text size="xs" c="dimmed">{quotaParts.join(' • ')}</Text>}
             {hasApiKey && apiKeyStatus.isError && (
               <Text size="xs" c="red">
                 {apiKeyStatus.error.message}

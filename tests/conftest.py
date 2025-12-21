@@ -17,6 +17,8 @@ def clean_file(tmp_path):
     f = tmp_path / "clean.txt"
     f.write_text("Hello, world!")
     return f
+import asyncio
+import httpx
 import os
 import shutil
 import sys
@@ -105,6 +107,39 @@ def clean_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def client():
+    from app.main import app
+
+    class SyncASGITransport(httpx.BaseTransport):
+        def __init__(self, asgi_app):
+            self._inner = httpx.ASGITransport(app=asgi_app)
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:  # type: ignore[override]
+            async def send() -> httpx.Response:
+                response = await self._inner.handle_async_request(request)
+                content = await response.aread()
+                return httpx.Response(
+                    status_code=response.status_code,
+                    headers=response.headers,
+                    content=content,
+                    extensions=response.extensions,
+                    request=request,
+                )
+
+            return asyncio.run(send())
+
+        def close(self) -> None:
+            asyncio.run(self._inner.aclose())
+
+    transport = SyncASGITransport(app)
+    client = httpx.Client(transport=transport, base_url="http://testserver")
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def pytest_configure(config):
