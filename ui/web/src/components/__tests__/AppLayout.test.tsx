@@ -5,14 +5,15 @@ import type { Mock } from 'vitest';
 import { vi } from 'vitest';
 
 import { AppLayout } from '../AppLayout';
-import { fetchApiKeyStatus } from '../../lib/api-client';
+import { fetchApiKeyStatus, fetchHealth } from '../../lib/api-client';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/'
 }));
 
 vi.mock('../../lib/api-client', () => ({
-  fetchApiKeyStatus: vi.fn()
+  fetchApiKeyStatus: vi.fn(),
+  fetchHealth: vi.fn()
 }));
 
 vi.mock('../../lib/api-key', () => ({
@@ -23,7 +24,9 @@ vi.mock('../../lib/api-key', () => ({
 
 describe('AppLayout', () => {
   it('renders API key owner with remaining tokens', async () => {
+    const mockedHealth = fetchHealth as unknown as Mock;
     const mockedFetch = fetchApiKeyStatus as unknown as Mock;
+    mockedHealth.mockResolvedValue({ status: 'ok' });
     mockedFetch.mockResolvedValue({
       bypassed: false,
       name: 'majid',
@@ -46,5 +49,24 @@ describe('AppLayout', () => {
     await waitFor(() => expect(screen.getByText(/majid/)).toBeInTheDocument());
     expect(screen.getByText(/12 day\(s\) left/)).toBeInTheDocument();
     expect(screen.getByText(/8 request\(s\) left today/)).toBeInTheDocument();
+  });
+
+  it('shows warmup message until health is ready', async () => {
+    const mockedHealth = fetchHealth as unknown as Mock;
+    mockedHealth.mockRejectedValueOnce(new Error('connection refused'));
+
+    const client = new QueryClient();
+
+    render(
+      <QueryClientProvider client={client}>
+        <MantineProvider>
+          <AppLayout>
+            <div>content</div>
+          </AppLayout>
+        </MantineProvider>
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
   });
 });

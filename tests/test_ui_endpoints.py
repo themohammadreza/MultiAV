@@ -63,3 +63,9 @@ def test_active_engines_uses_registry(monkeypatch, client: httpx.Client):
     assert response.status_code == 200
     engines = response.json()["engines"]
     assert any(e["engine"] == "stub" and e["timeout"] == 7 and e["weight"] == 2.0 for e in engines)
+
+
+def test_health_endpoint(client: httpx.Client):
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json().get("status") == "ok"
