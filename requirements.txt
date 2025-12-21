@@ -10,7 +10,7 @@ pytz==2024.1
 clamd==1.0.2
 yara-python==4.5.0
 requests==2.32.3
-httpx==0.27.0
 boto3==1.34.158
 pytest==8.2.2
 moto==5.0.11
+httpx==0.28.1

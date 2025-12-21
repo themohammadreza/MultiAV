@@ -212,3 +212,4 @@ storage/files/*
 **/__pycache__/
 **/test_clamav.py
 .vscode/
+pyrightconfig.json
