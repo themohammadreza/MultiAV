@@ -172,6 +172,11 @@ def load_engine_registry() -> Dict:
 
 def run_all_engines(job_id: str, file_path: str):
     """Compatibility shim: enqueue the Celery-based orchestration."""
+    normalized = _normalize_job_id(job_id)
+    if normalized is None:
+        logger.warning("Refusing to enqueue job with invalid UUID: %s", job_id)
+        return None
+
     try:
         # Local import to avoid circular dependency during module load
         from app.workers.tasks import run_scan
@@ -179,4 +184,4 @@ def run_all_engines(job_id: str, file_path: str):
         logger.error("Unable to enqueue job %s: %s", job_id, exc)
         return None
 
-    return run_scan.delay(str(job_id), file_path)
+    return run_scan.delay(str(normalized), file_path)
