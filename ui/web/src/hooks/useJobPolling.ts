@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchJobResult, isTerminal } from '@/lib/api-client';
+import { ApiError, fetchJobResult, isTerminal } from '@/lib/api-client';
 import { ResultSummary } from '@/lib/api-types';
 import { loadConfig } from '@/lib/config';
 import { validateJobId } from '@/lib/validators';
@@ -39,6 +39,7 @@ export function useJobPolling(jobId?: string) {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: (query) => {
+      if (query.state.error) return false;
       if (!query.state.data) return config.pollIntervalMs;
       if (!shouldContinue(query.state.data.status)) return false;
 
@@ -48,6 +49,9 @@ export function useJobPolling(jobId?: string) {
       return Math.min(config.pollIntervalMs * 5, 20_000);
     },
     retry(failureCount, error) {
+      if (error instanceof ApiError && error.status && error.status >= 400 && error.status < 500) {
+        return false;
+      }
       if (error.message.includes('UUID')) return false;
       return failureCount < 3;
     },

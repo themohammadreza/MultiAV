@@ -6,6 +6,16 @@ const config = loadConfig();
 const TERMINAL_STATUSES: Array<JobStatus | string> = ['done', 'done_with_errors', 'error'];
 const apiBase = config.apiBaseUrl.replace(/\/+$/, '');
 
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+    this.name = 'ApiError';
+  }
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.text();
@@ -21,7 +31,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     if (response.status === 401 && !getApiKey()) {
       message = message ? `${message} (set X-API-Key in the UI)` : 'Unauthorized (set X-API-Key in the UI)';
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   const body = await response.text();
