@@ -26,6 +26,7 @@ async def upload_file(
     redis_client = get_rate_limit_redis_client(settings.REDIS_URL)
 
     sha256 = await compute_sha256(file)
+    original_filename = file.filename
 
     iran_tz = pytz.timezone('Asia/Tehran')
 
@@ -33,6 +34,12 @@ async def upload_file(
     existing = db.query(FileModel).filter(FileModel.sha256 == sha256).first()
     file_entry: FileModel | None = existing
     if existing:
+        if not existing.filename and original_filename:
+            existing.filename = original_filename
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
+
         latest_job_query = db.query(ScanJob).filter(ScanJob.file_id == existing.id)
         if api_key:
             latest_job_query = latest_job_query.filter(ScanJob.api_key_id == api_key.id)
@@ -59,6 +66,7 @@ async def upload_file(
         file_entry = FileModel(
             sha256 = sha256,
             path = location,
+            filename = original_filename,
         )
         db.add(file_entry)
         db.commit()

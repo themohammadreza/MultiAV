@@ -58,6 +58,7 @@ def test_upload_scan_retrieve_flow(monkeypatch, client: httpx.Client, api_key_he
     assert result is not None
     assert result["status"] == "done"
     assert result["verdict"] == "clean"
+    assert result["filename"] == "test.txt"
     assert "api-test" in result["details"]
 
 

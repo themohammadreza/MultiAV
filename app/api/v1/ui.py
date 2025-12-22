@@ -108,6 +108,7 @@ def list_recent_jobs(
                 "verdict": summary.get("verdict"),
                 "severity": summary.get("severity"),
                 "sha256": job.file.sha256 if job.file else None,
+                "filename": summary.get("filename", job.file.filename if job.file else None),
                 "started_at": summary.get("started_at"),
                 "completed_at": summary.get("completed_at"),
             }

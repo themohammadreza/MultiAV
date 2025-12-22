@@ -67,6 +67,7 @@ export default function StatusPage() {
                   <Text fw={600}>Job {query.data.job_id}</Text>
                   <Text>{query.data.status}</Text>
                 </Group>
+                <Text size="sm">File: {query.data.filename || '—'}</Text>
                 <Text size="sm" c="dimmed">
                   Started {query.data.started_at ? new Date(query.data.started_at).toLocaleString() : 'pending'}
                 </Text>

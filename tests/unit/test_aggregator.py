@@ -47,6 +47,7 @@ def test_summarize_job_without_results_returns_pending():
         status="queued",
         created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         completed_at=None,
+        file=SimpleNamespace(filename="empty.bin"),
     )
 
     summary_data = summary.summarize_job(job, [])
@@ -54,6 +55,7 @@ def test_summarize_job_without_results_returns_pending():
     assert summary_data["verdict"] == "pending"
     assert summary_data["engine_count"] == 0
     assert summary_data["severity"] == "informational"
+    assert summary_data["filename"] == "empty.bin"
 
 
 @pytest.mark.unit

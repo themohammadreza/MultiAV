@@ -26,6 +26,7 @@ describe('HistoryPage', () => {
           status: 'done',
           verdict: 'clean',
           severity: 'low',
+          filename: 'archive.zip',
           started_at: '2025-01-01T00:00:00Z',
           completed_at: '2025-01-01T00:00:10Z'
         }
@@ -44,6 +45,7 @@ describe('HistoryPage', () => {
 
     await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('job-123')).toBeInTheDocument();
+    expect(await screen.findByText('archive.zip')).toBeInTheDocument();
     expect(screen.getByText(/history is sourced from the server/i)).toBeInTheDocument();
     expect(screen.queryByText(/cached uploads/i)).not.toBeInTheDocument();
   });

@@ -54,7 +54,7 @@ def test_list_recent_jobs_and_engines():
             assert request.headers.get("X-API-Key") == "test-key"
             assert request.url.params.get("severity") == "high"
             assert request.url.params.get("job_id") == "abc"
-            return httpx.Response(200, json={"items": [{"job_id": "1"}]})
+            return httpx.Response(200, json={"items": [{"job_id": "1", "filename": "foo.bin"}]})
         if request.url.path == "/api/v1/ui/engines/active":
             assert request.headers.get("X-API-Key") == "test-key"
             return httpx.Response(200, json={"engines": [{"engine": "stub", "timeout": 10, "weight": 1.0}]})
@@ -63,7 +63,7 @@ def test_list_recent_jobs_and_engines():
     client = build_client(httpx.MockTransport(handler))
 
     jobs = client.list_recent_jobs(limit=5, severity="high", job_id="abc")
-    assert jobs == [{"job_id": "1"}]
+    assert jobs == [{"job_id": "1", "filename": "foo.bin"}]
 
     engines = client.get_engines()
     assert engines == [{"engine": "stub", "timeout": 10, "weight": 1.0}]
