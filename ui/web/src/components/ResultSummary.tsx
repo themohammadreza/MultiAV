@@ -7,6 +7,18 @@ interface Props {
   summary: ResultSummaryData;
 }
 
+function formatTitleCase(value?: string | null) {
+  if (!value) return '';
+
+  return value
+    .toString()
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function formatList(items?: Array<string | null> | null) {
   if (!items || items.length === 0) return '—';
   return items.filter(Boolean).join(', ');
@@ -51,6 +63,8 @@ export function ResultSummaryCard({ summary }: Props) {
   const status = (summary.status || '').toLowerCase();
   const badgeColor =
     status === 'done' ? 'green' : status === 'done_with_errors' ? 'yellow' : status === 'error' ? 'red' : 'blue';
+  const verdictLabel = formatTitleCase(summary.verdict || 'pending');
+  const severityLabel = formatTitleCase(summary.severity || 'informational');
 
   return (
     <Stack gap="md">
@@ -76,16 +90,16 @@ export function ResultSummaryCard({ summary }: Props) {
                 Completed {summary.completed_at ? new Date(summary.completed_at).toLocaleString() : '—'}
               </Text>
             </Stack>
-        </Group>
+          </Group>
 
-        <Group align="flex-start" grow>
-          <Stack>
-            <Text fw={600}>Verdict</Text>
-            <Title order={3}>{summary.verdict || 'pending'}</Title>
-          </Stack>
-          <Stack>
-            <Text fw={600}>Severity</Text>
-            <Title order={3}>{summary.severity || 'informational'}</Title>
+          <Group align="flex-start" grow>
+            <Stack>
+              <Text fw={600}>Verdict</Text>
+              <Title order={3}>{verdictLabel}</Title>
+            </Stack>
+            <Stack>
+              <Text fw={600}>Severity</Text>
+              <Title order={3}>{severityLabel}</Title>
             </Stack>
             <Stack>
               <Text fw={600}>Confidence</Text>
@@ -144,9 +158,9 @@ export function ResultSummaryCard({ summary }: Props) {
                     <Table.Tr key={row.engine}>
                       <Table.Td>{row.engine}</Table.Td>
                       <Table.Td>{row.status}</Table.Td>
-                      <Table.Td>{row.verdict || '—'}</Table.Td>
+                      <Table.Td>{formatTitleCase(row.verdict) || '—'}</Table.Td>
                       <Table.Td>{row.signature || '—'}</Table.Td>
-                      <Table.Td>{row.severity || '—'}</Table.Td>
+                      <Table.Td>{formatTitleCase(row.severity) || '—'}</Table.Td>
                       <Table.Td>{row.confidence ?? '—'}</Table.Td>
                       <Table.Td>{row.duration || '—'}</Table.Td>
                       <Table.Td>{row.error || '—'}</Table.Td>
