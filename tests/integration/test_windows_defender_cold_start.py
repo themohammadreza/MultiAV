@@ -16,7 +16,7 @@ from tests.utils import (
 @pytest.mark.integration
 def test_windows_defender_cold_start_persists_results(monkeypatch, celery_worker_instance):
     attempts: dict[str, int | float] = {"count": 0}
-    monkeypatch.setenv("WINDEFENDER_TIMEOUT", "5")  # Ensure minimum timeout enforcement is exercised
+    monkeypatch.setenv("WINDEFENDER_TIMEOUT", "5")  # Ensure low budgets are respected
     monkeypatch.setattr(win_engine, "RETRY_BACKOFF_SECONDS", 0.01)
     monkeypatch.setattr(win_engine, "MAX_CONNECTION_ATTEMPTS", 2)
 
@@ -27,7 +27,7 @@ def test_windows_defender_cold_start_persists_results(monkeypatch, celery_worker
         def json(self):
             return {"windows-defender": {"infected": False, "engine": "1.0", "result": "clean"}}
 
-    def fake_post(url, files, timeout):  # noqa: ARG001
+    def fake_post(url, files, timeout, allow_redirects=True):  # noqa: ARG001
         attempts["count"] += 1
         attempts["url"] = url
         attempts["timeout"] = timeout
@@ -55,4 +55,4 @@ def test_windows_defender_cold_start_persists_results(monkeypatch, celery_worker
     details = results[0].result.get("details", {})
     assert details.get("request_attempts") == 2
     assert details.get("first_request_latency_ms") is not None
-    assert details.get("timeout_seconds") >= win_engine.MIN_TIMEOUT_SECONDS
+    assert details.get("timeout_seconds") == 5.0

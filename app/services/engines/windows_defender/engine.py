@@ -19,9 +19,10 @@ ENGINE_TYPE = "Antivirus"
 DEFAULT_HOST = "windows-defender"
 DEFAULT_PORT = 3993
 DEFAULT_TIMEOUT = 120
-MIN_TIMEOUT_SECONDS = 30.0
+MIN_RECOMMENDED_TIMEOUT_SECONDS = 10.0
 MAX_CONNECTION_ATTEMPTS = 2
 RETRY_BACKOFF_SECONDS = 1.0
+CONNECT_TIMEOUT_SECONDS = 5.0
 
 
 def _as_bool(value: Any) -> bool:
@@ -76,47 +77,65 @@ def _get_timeout_seconds() -> float:
         logger.warning("Invalid WINDEFENDER_TIMEOUT=%s, using default %ss", raw_timeout, DEFAULT_TIMEOUT)
         configured_timeout = float(DEFAULT_TIMEOUT)
 
-    if configured_timeout < MIN_TIMEOUT_SECONDS:
-        logger.info(
-            "Windows Defender timeout raised to %ss (requested=%s) to cover cold starts",
-            MIN_TIMEOUT_SECONDS,
+    if configured_timeout < MIN_RECOMMENDED_TIMEOUT_SECONDS:
+        logger.warning(
+            "Windows Defender timeout %ss is below recommended floor %ss; cold starts may timeout early",
             configured_timeout,
+            MIN_RECOMMENDED_TIMEOUT_SECONDS,
         )
-    return max(configured_timeout, MIN_TIMEOUT_SECONDS)
+    return max(configured_timeout, 0.1)
 
 
 def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response, int, Optional[int]]:
-    """POST the file to Windows Defender with a small retry for cold-start refusals.
+    """POST the file to Windows Defender with retry/backoff and a total timeout budget.
 
     Returns (response, attempts, first_latency_ms).
     """
 
     start_time = time.time()
+    deadline = start_time + timeout
     first_latency_ms: Optional[int] = None
     last_exc: Optional[Exception] = None
 
     for attempt in range(1, MAX_CONNECTION_ATTEMPTS + 1):
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            raise requests.Timeout(f"Windows Defender request exceeded {timeout}s budget before attempt {attempt}")
+
+        # Apply a tuple timeout so the connect phase does not consume the full budget.
+        connect_timeout = min(CONNECT_TIMEOUT_SECONDS, max(remaining, 0.1))
+        per_attempt_timeout: float | tuple[float, float] = (connect_timeout, remaining)
+
         try:
             with open(path, "rb") as f:
-                response = requests.post(url, files={"malware": f}, timeout=timeout)
+                response = requests.post(
+                    url,
+                    files={"malware": f},
+                    timeout=per_attempt_timeout,
+                    allow_redirects=False,
+                )
 
             if first_latency_ms is None:
                 first_latency_ms = int((time.time() - start_time) * 1000)
 
             return response, attempt, first_latency_ms
 
-        except requests.ConnectionError as exc:  # noqa: BLE001 - retry on cold-start refusal
+        except (requests.ConnectionError, requests.Timeout) as exc:  # noqa: BLE001 - retry on cold-start refusal/timeout
             last_exc = exc
             if first_latency_ms is None:
                 first_latency_ms = int((time.time() - start_time) * 1000)
 
             if attempt < MAX_CONNECTION_ATTEMPTS:
-                delay = RETRY_BACKOFF_SECONDS * attempt
+                delay = min(RETRY_BACKOFF_SECONDS * attempt, max(deadline - time.time(), 0))
+                if delay <= 0:
+                    break
                 logger.warning(
-                    "Windows Defender connection refused on attempt %s/%s, retrying in %ss",
+                    "Windows Defender connection attempt %s/%s failed (%s), retrying in %ss (remaining budget=%ss)",
                     attempt,
                     MAX_CONNECTION_ATTEMPTS,
+                    exc,
                     delay,
+                    round(deadline - time.time(), 2),
                 )
                 time.sleep(delay)
                 continue
@@ -183,8 +202,8 @@ def run(file_path: str):
             details={
                 "scan_time_ms": duration_ms,
                 "url": url,
-                "request_attempts": MAX_CONNECTION_ATTEMPTS,
-                "first_request_latency_ms": first_latency_ms if "first_latency_ms" in locals() else None,
+                "request_attempts": attempts or MAX_CONNECTION_ATTEMPTS,
+                "first_request_latency_ms": first_latency_ms,
                 "timeout_seconds": timeout,
             },
         )
