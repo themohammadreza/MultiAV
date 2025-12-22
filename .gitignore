@@ -213,3 +213,7 @@ storage/files/*
 **/test_clamav.py
 .vscode/
 pyrightconfig.json
+
+# Frontend artifacts
+ui/web/.next/
+ui/web/node_modules/

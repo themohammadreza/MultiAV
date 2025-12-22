@@ -69,7 +69,9 @@ export function ResultSummaryCard({ summary }: Props) {
   return (
     <Stack gap="md">
       <Group justify="space-between">
-        <Title order={2}>Results</Title>
+        <Text fw={700} size="lg">
+          Summary
+        </Text>
         <Badge color={badgeColor}>{summary.status}</Badge>
       </Group>
 
