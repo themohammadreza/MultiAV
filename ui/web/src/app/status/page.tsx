@@ -34,6 +34,8 @@ export default function StatusPage() {
     }
   };
 
+  const handleInspectClick = () => handleInspect();
+
   return (
     <Stack gap="md">
       <Title order={2}>Live status</Title>
@@ -52,7 +54,7 @@ export default function StatusPage() {
               rightSection={recentJobs.isFetching ? <Loader size="xs" /> : undefined}
               w="100%"
             />
-            <Button onClick={handleInspect} leftSection={<IconArrowRight size={16} />}>
+            <Button onClick={handleInspectClick} leftSection={<IconArrowRight size={16} />}>
               Open results
             </Button>
           </Group>
