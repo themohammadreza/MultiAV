@@ -31,31 +31,38 @@ async def upload_file(
 
     # check cache
     existing = db.query(FileModel).filter(FileModel.sha256 == sha256).first()
+    file_entry: FileModel | None = existing
     if existing:
-        latest_job = db.query(ScanJob).filter(
-        ScanJob.file_id == existing.id).order_by(ScanJob.created_at.desc()).first()
+        latest_job_query = db.query(ScanJob).filter(ScanJob.file_id == existing.id)
+        if api_key:
+            latest_job_query = latest_job_query.filter(ScanJob.api_key_id == api_key.id)
+        else:
+            latest_job_query = latest_job_query.filter(ScanJob.api_key_id.is_(None))
+        latest_job = latest_job_query.order_by(ScanJob.created_at.desc()).first()
 
-        # Convert UTC to Tehran time
-        first_scan = existing.uploaded_at.astimezone(iran_tz)
+        if latest_job:
+            # Convert UTC to Tehran time
+            first_scan = existing.uploaded_at.astimezone(iran_tz)
 
-        return {
-            "job_id": latest_job.id,
-            "status": latest_job.status,
-            "cached": True,
-            "scanned_at": first_scan.isoformat(),
-        }
+            return {
+                "job_id": latest_job.id,
+                "status": latest_job.status,
+                "cached": True,
+                "scanned_at": first_scan.isoformat(),
+            }
 
     check_rate_limit(api_key, redis_client)
     _, location = await save_file(file)
 
     # if it's a new file
-    file_entry = FileModel(
-        sha256 = sha256,
-        path = location,
-    )
-    db.add(file_entry)
-    db.commit()
-    db.refresh(file_entry)
+    if not file_entry:
+        file_entry = FileModel(
+            sha256 = sha256,
+            path = location,
+        )
+        db.add(file_entry)
+        db.commit()
+        db.refresh(file_entry)
 
     
     job = ScanJob(
