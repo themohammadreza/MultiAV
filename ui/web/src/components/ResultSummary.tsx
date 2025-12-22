@@ -83,6 +83,7 @@ export function ResultSummaryCard({ summary }: Props) {
               <Text size="sm" c="dimmed">
                 {summary.job_id}
               </Text>
+              <Text size="sm">File: {summary.filename || '—'}</Text>
             </Stack>
             <Stack gap={4} ta="right">
               <Text size="sm" c="dimmed">

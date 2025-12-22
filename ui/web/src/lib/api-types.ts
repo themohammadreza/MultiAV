@@ -29,6 +29,7 @@ export interface ResultSummary {
   engine_count?: number;
   started_at?: string | null;
   completed_at?: string | null;
+  filename?: string | null;
   families?: string[] | null;
   primary_family?: string | null;
   categories?: string[] | null;
@@ -41,6 +42,7 @@ export interface RecentJobItem {
   status: JobStatus | string;
   verdict?: string | null;
   severity?: string | null;
+  filename?: string | null;
   sha256?: string | null;
   started_at?: string | null;
   completed_at?: string | null;

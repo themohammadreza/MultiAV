@@ -7,12 +7,17 @@ from sqlalchemy.engine import Engine
 def run_migrations(engine: Engine) -> None:
     """Apply lightweight, idempotent migrations for environments without Alembic."""
     inspector = inspect(engine)
-    if "scan_jobs" not in inspector.get_table_names():
-        return
+    table_names = set(inspector.get_table_names())
 
-    columns = {col["name"] for col in inspector.get_columns("scan_jobs")}
-    if "api_key_id" not in columns:
-        _add_scan_jobs_api_key_id(engine, inspector)
+    if "scan_jobs" in table_names:
+        columns = {col["name"] for col in inspector.get_columns("scan_jobs")}
+        if "api_key_id" not in columns:
+            _add_scan_jobs_api_key_id(engine, inspector)
+
+    if "files" in table_names:
+        file_columns = {col["name"] for col in inspector.get_columns("files")}
+        if "filename" not in file_columns:
+            _add_files_filename(engine)
 
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
@@ -36,3 +41,14 @@ def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
 
         # Fallback for SQLite and other dialects: add nullable column without FK to avoid dialect limitations.
         conn.execute(text("ALTER TABLE scan_jobs ADD COLUMN api_key_id"))
+
+
+def _add_files_filename(engine: Engine) -> None:
+    """Add filename column to files to persist original upload name."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(text("ALTER TABLE files ADD COLUMN IF NOT EXISTS filename TEXT"))
+            return
+
+        conn.execute(text("ALTER TABLE files ADD COLUMN filename"))

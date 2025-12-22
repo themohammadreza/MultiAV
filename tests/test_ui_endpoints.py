@@ -23,9 +23,9 @@ def _create_api_key(name: str = "ui-test") -> tuple[str, APIKey]:
     return raw_key, api_key
 
 
-def seed_job(status: str = "done", api_key_id=None, sha256: str = "abc123") -> str:
+def seed_job(status: str = "done", api_key_id=None, sha256: str = "abc123", filename: str = "sample.bin") -> str:
     db = SessionLocal()
-    file = File(sha256=sha256, path="/tmp/file")
+    file = File(sha256=sha256, path="/tmp/file", filename=filename)
     job = ScanJob(file=file, status=status, api_key_id=api_key_id)
     result = EngineResult(
         job=job,
@@ -50,6 +50,7 @@ def test_recent_jobs_returns_summary(client: httpx.Client):
     assert payload["items"][0]["job_id"] == job_id
     assert payload["items"][0]["verdict"] == "clean"
     assert payload["items"][0]["sha256"] == "abc123"
+    assert payload["items"][0]["filename"] == "sample.bin"
 
 
 def test_recent_jobs_filters_by_severity_and_job(client: httpx.Client):

@@ -76,6 +76,8 @@ def _serialize_engine_result(record) -> Dict:
 def summarize_job(job, engine_results) -> Dict[str, object]:
     """Produce a single aggregated view for a ScanJob."""
     results = [_serialize_engine_result(r) for r in engine_results]
+    file_obj = getattr(job, "file", None)
+    filename = getattr(file_obj, "filename", None) if file_obj is not None else None
 
     if not results:
         return {
@@ -93,6 +95,7 @@ def summarize_job(job, engine_results) -> Dict[str, object]:
             "categories": [],
             "signatures": [],
             "details": {},
+            "filename": filename,
         }
 
     engine_registry = get_active_engines()
@@ -120,6 +123,7 @@ def summarize_job(job, engine_results) -> Dict[str, object]:
         "categories": families.get("categories"),
         "signatures": families.get("signatures"),
         "details": details,
+        "filename": filename,
     }
 
     return aggregated

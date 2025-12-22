@@ -22,6 +22,7 @@ export default function HistoryPage() {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Job ID</Table.Th>
+                <Table.Th>File Name</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Verdict</Table.Th>
                 <Table.Th>Severity</Table.Th>
@@ -33,6 +34,11 @@ export default function HistoryPage() {
                   <Table.Td>
                     <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                       {job.job_id}
+                    </Link>
+                  </Table.Td>
+                  <Table.Td>
+                    <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {job.filename || '—'}
                     </Link>
                   </Table.Td>
                   <Table.Td>

@@ -14,6 +14,7 @@ class File(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     sha256 = Column(String(64), unique=True, index=True)
     path = Column(String)
+    filename = Column(String, nullable=True)
     uploaded_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     jobs = relationship("ScanJob", back_populates="file")
