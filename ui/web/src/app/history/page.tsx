@@ -62,7 +62,7 @@ export default function HistoryPage() {
             </Table.Tbody>
           </Table>
           <Text size="sm" c="dimmed">
-            Click any record to open the full scan report.
+            Click on any record to open the full scan report.
           </Text>
         </Stack>
       </Card>
