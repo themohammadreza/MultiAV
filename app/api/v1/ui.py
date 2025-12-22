@@ -4,7 +4,7 @@ import math
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.auth import get_current_api_key
@@ -53,6 +53,7 @@ def get_api_key_status(
 @router.get("/jobs/recent")
 def list_recent_jobs(
     *,
+    api_key: APIKeyModel | None = Depends(get_current_api_key),
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     status: Optional[str] = Query(None, description="Filter by status substring"),
@@ -60,12 +61,16 @@ def list_recent_jobs(
     sha256: Optional[str] = Query(None, description="Filter by SHA256 substring"),
     job_id: Optional[str] = Query(None, description="Filter by job_id"),
 ):
+    if api_key is None:
+        raise HTTPException(status_code=401, detail="Missing api_key")
+
     query = (
         db.query(ScanJob)
         .join(File)
         .options(selectinload(ScanJob.file), selectinload(ScanJob.results))
         .order_by(ScanJob.created_at.desc())
     )
+    query = query.filter(ScanJob.api_key_id == api_key.id)
 
     job_uuid: UUID | None = None
     if job_id:
