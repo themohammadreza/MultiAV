@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchRecentJobs } from '@/lib/api-client';
+import { toTitleCase } from '@/lib/formatters';
 import { Badge, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
 import Link from 'next/link';
 
@@ -43,17 +44,17 @@ export default function HistoryPage() {
                   </Table.Td>
                   <Table.Td>
                     <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      {job.status}
+                      {toTitleCase(job.status)}
                     </Link>
                   </Table.Td>
                   <Table.Td>
                     <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      {job.verdict ?? 'pending'}
+                      {toTitleCase(job.verdict ?? 'pending')}
                     </Link>
                   </Table.Td>
                   <Table.Td>
                     <Link href={`/results/${job.job_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      {job.severity ?? 'n/a'}
+                      {toTitleCase(job.severity ?? 'n/a')}
                     </Link>
                   </Table.Td>
                 </Table.Tr>
