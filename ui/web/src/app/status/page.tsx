@@ -50,7 +50,7 @@ export default function StatusPage() {
               onOptionSubmit={handleInspect}
               data={recentJobIds || []}
               limit={20}
-              comboboxProps={{ withinPortal: false }}
+              comboboxProps={{ withinPortal: true, zIndex: 350 }}
               rightSection={recentJobs.isFetching ? <Loader size="xs" /> : undefined}
               w="100%"
             />
