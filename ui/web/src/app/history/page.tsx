@@ -61,7 +61,7 @@ export default function HistoryPage() {
             </Table.Tbody>
           </Table>
           <Text size="sm" c="dimmed">
-            History is sourced from the server so results reflect the latest scans even after browser refreshes.
+            Click any record to open the full scan report.
           </Text>
         </Stack>
       </Card>
