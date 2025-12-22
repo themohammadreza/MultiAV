@@ -58,7 +58,10 @@ async def upload_file(
     db.refresh(file_entry)
 
     
-    job = ScanJob(file_id = file_entry.id)
+    job = ScanJob(
+        file_id=file_entry.id,
+        api_key_id=api_key.id if api_key else None,
+    )
     db.add(job)
     db.commit()
     db.refresh(job)

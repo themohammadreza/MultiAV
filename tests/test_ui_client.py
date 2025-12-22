@@ -8,9 +8,15 @@ from typing import Any, Dict
 from app.ui.client import APIConfig, MultiAVClient
 
 
-def build_client(responder: httpx.MockTransport) -> MultiAVClient:
-    client = MultiAVClient(APIConfig(base_url="http://testserver", timeout=1.0, poll_interval=0.01))
-    client._client = httpx.Client(base_url="http://testserver", transport=responder)
+def build_client(responder: httpx.MockTransport, api_key: str | None = "test-key") -> MultiAVClient:
+    client = MultiAVClient(
+        APIConfig(base_url="http://testserver", timeout=1.0, poll_interval=0.01, api_key=api_key)
+    )
+    client._client = httpx.Client(
+        base_url="http://testserver",
+        transport=responder,
+        headers=client._client.headers,
+    )
     return client
 
 
@@ -19,9 +25,11 @@ def test_upload_and_poll_flow():
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/scan/":
+            assert request.headers.get("X-API-Key") == "test-key"
             return httpx.Response(200, json={"job_id": "abc", "status": "queued", "cached": False})
 
         if request.url.path == "/api/v1/results/abc":
+            assert request.headers.get("X-API-Key") == "test-key"
             calls["results"] += 1
             if calls["results"] < 2:
                 return httpx.Response(200, json={"job_id": "abc", "status": "queued"})
@@ -43,10 +51,12 @@ def test_upload_and_poll_flow():
 def test_list_recent_jobs_and_engines():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/ui/jobs/recent":
+            assert request.headers.get("X-API-Key") == "test-key"
             assert request.url.params.get("severity") == "high"
             assert request.url.params.get("job_id") == "abc"
             return httpx.Response(200, json={"items": [{"job_id": "1"}]})
         if request.url.path == "/api/v1/ui/engines/active":
+            assert request.headers.get("X-API-Key") == "test-key"
             return httpx.Response(200, json={"engines": [{"engine": "stub", "timeout": 10, "weight": 1.0}]})
         return httpx.Response(404)
 
