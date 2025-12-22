@@ -40,6 +40,7 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
         return {"job_id": job_id, "engine": engine_name, "status": "error"}
 
     try:
+        logger.info("Job %s engine %s starting (timeout=%ss)", job_id, engine_name, timeout)
         local_path, cleanup = storage.ensure_local_copy(file_on_disk)
         try:
             payload = runner(local_path)
@@ -88,6 +89,13 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
     if not persisted:
         dispatcher.record_dispatch_error(job_id, f"Failed to persist engine result for {engine_name}")
 
+    logger.info(
+        "Job %s engine %s finished with status=%s (persisted=%s)",
+        job_id,
+        engine_name,
+        status,
+        persisted,
+    )
     return {"job_id": job_id, "engine": engine_name, "status": status}
 
 
@@ -106,11 +114,18 @@ def handle_chord_failure(request=None, exc=None, traceback=None, job_id: str = N
 @celery.task
 def finalize_job(engine_task_results: List[dict], job_id: str) -> dict:
     """Fan-in callback: mark job complete and return aggregate summary."""
+    logger.info(
+        "Job %s chord callback invoked with %s engine result(s): %s",
+        job_id,
+        len(engine_task_results),
+        engine_task_results,
+    )
     summary = dispatcher.finalize_job_summary(job_id)
     if summary is None:
         message = "Job missing during finalize"
         dispatcher.record_dispatch_error(job_id, message)
         return {"job_id": job_id, "status": "error", "error": message}
+    logger.info("Job %s finalized with status=%s", job_id, summary.get("status"))
     return summary
 
 
