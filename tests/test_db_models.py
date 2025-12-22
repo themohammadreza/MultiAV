@@ -2,7 +2,10 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy import inspect
 
+<<<<<<< HEAD
 from app.db.migrations import run_migrations
+=======
+>>>>>>> 8463760 (Associate API keys with scan jobs (#22))
 from app.db.models import APIKey, ScanJob
 
 
@@ -19,6 +22,7 @@ def test_scan_job_has_api_key_column():
     column_names = set(ScanJob.__table__.columns.keys())
 
     assert "api_key_id" in column_names
+<<<<<<< HEAD
 
 
 @pytest.mark.unit
@@ -43,3 +47,5 @@ def test_run_migrations_adds_api_key_id_column():
     inspector = inspect(engine)
     column_names = {col["name"] for col in inspector.get_columns("scan_jobs")}
     assert "api_key_id" in column_names
+=======
+>>>>>>> 8463760 (Associate API keys with scan jobs (#22))
