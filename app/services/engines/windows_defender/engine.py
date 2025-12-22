@@ -1,9 +1,12 @@
+import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 try:
     from app.services.aggregator.normalize import normalize_engine_result
@@ -16,6 +19,9 @@ ENGINE_TYPE = "Antivirus"
 DEFAULT_HOST = "windows-defender"
 DEFAULT_PORT = 3993
 DEFAULT_TIMEOUT = 120
+MIN_TIMEOUT_SECONDS = 30.0
+MAX_CONNECTION_ATTEMPTS = 2
+RETRY_BACKOFF_SECONDS = 1.0
 
 
 def _as_bool(value: Any) -> bool:
@@ -62,6 +68,67 @@ def _build_url() -> str:
     return f"http://{host}:{port}/scan"
 
 
+def _get_timeout_seconds() -> float:
+    raw_timeout = os.getenv("WINDEFENDER_TIMEOUT", str(DEFAULT_TIMEOUT))
+    try:
+        configured_timeout = float(raw_timeout)
+    except ValueError:
+        logger.warning("Invalid WINDEFENDER_TIMEOUT=%s, using default %ss", raw_timeout, DEFAULT_TIMEOUT)
+        configured_timeout = float(DEFAULT_TIMEOUT)
+
+    if configured_timeout < MIN_TIMEOUT_SECONDS:
+        logger.info(
+            "Windows Defender timeout raised to %ss (requested=%s) to cover cold starts",
+            MIN_TIMEOUT_SECONDS,
+            configured_timeout,
+        )
+    return max(configured_timeout, MIN_TIMEOUT_SECONDS)
+
+
+def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response, int, Optional[int]]:
+    """POST the file to Windows Defender with a small retry for cold-start refusals.
+
+    Returns (response, attempts, first_latency_ms).
+    """
+
+    start_time = time.time()
+    first_latency_ms: Optional[int] = None
+    last_exc: Optional[Exception] = None
+
+    for attempt in range(1, MAX_CONNECTION_ATTEMPTS + 1):
+        try:
+            with open(path, "rb") as f:
+                response = requests.post(url, files={"malware": f}, timeout=timeout)
+
+            if first_latency_ms is None:
+                first_latency_ms = int((time.time() - start_time) * 1000)
+
+            return response, attempt, first_latency_ms
+
+        except requests.ConnectionError as exc:  # noqa: BLE001 - retry on cold-start refusal
+            last_exc = exc
+            if first_latency_ms is None:
+                first_latency_ms = int((time.time() - start_time) * 1000)
+
+            if attempt < MAX_CONNECTION_ATTEMPTS:
+                delay = RETRY_BACKOFF_SECONDS * attempt
+                logger.warning(
+                    "Windows Defender connection refused on attempt %s/%s, retrying in %ss",
+                    attempt,
+                    MAX_CONNECTION_ATTEMPTS,
+                    delay,
+                )
+                time.sleep(delay)
+                continue
+
+            raise
+
+    if last_exc:
+        raise last_exc
+
+    raise RuntimeError("Windows Defender request failed without raising an exception")
+
+
 def run(file_path: str):
     """
     Scan a file using the malice/windows-defender web service.
@@ -86,13 +153,20 @@ def run(file_path: str):
         )
 
     url = _build_url()
-    timeout = float(os.getenv("WINDEFENDER_TIMEOUT", str(DEFAULT_TIMEOUT)))
+    timeout = _get_timeout_seconds()
+    attempts = 0
+    first_latency_ms: Optional[int] = None
 
     try:
-        with open(path, "rb") as f:
-            response = requests.post(url, files={"malware": f}, timeout=timeout)
+        response, attempts, first_latency_ms = _post_scan(path, url, timeout)
     except requests.RequestException as exc:  # noqa: BLE001 - network/connection errors should be reported
         duration_ms = int((time.time() - start_time) * 1000)
+        logger.error(
+            "Windows Defender request failed after %sms (attempts=%s): %s",
+            duration_ms,
+            MAX_CONNECTION_ATTEMPTS,
+            exc,
+        )
         return normalize_engine_result(
             engine=ENGINE_NAME,
             engine_type=ENGINE_TYPE,
@@ -109,10 +183,20 @@ def run(file_path: str):
             details={
                 "scan_time_ms": duration_ms,
                 "url": url,
+                "request_attempts": MAX_CONNECTION_ATTEMPTS,
+                "first_request_latency_ms": first_latency_ms if "first_latency_ms" in locals() else None,
+                "timeout_seconds": timeout,
             },
         )
 
     duration_ms = int((time.time() - start_time) * 1000)
+    logger.info(
+        "Windows Defender first-request latency %sms over %s attempt(s); total duration %sms (timeout=%ss)",
+        first_latency_ms,
+        attempts,
+        duration_ms,
+        timeout,
+    )
 
     if response.status_code != 200:
         return normalize_engine_result(
@@ -132,6 +216,9 @@ def run(file_path: str):
                 "scan_time_ms": duration_ms,
                 "url": url,
                 "response_text": response.text,
+                "request_attempts": attempts,
+                "first_request_latency_ms": first_latency_ms,
+                "timeout_seconds": timeout,
             },
         )
 
@@ -155,6 +242,9 @@ def run(file_path: str):
                 "scan_time_ms": duration_ms,
                 "url": url,
                 "response_text": response.text,
+                "request_attempts": attempts,
+                "first_request_latency_ms": first_latency_ms,
+                "timeout_seconds": timeout,
             },
         )
 
@@ -180,6 +270,9 @@ def run(file_path: str):
         duration_ms=duration_ms,
         details={
             "scan_time_ms": duration_ms,
+            "first_request_latency_ms": first_latency_ms,
+            "request_attempts": attempts,
+            "timeout_seconds": timeout,
             "updated_at": updated_at,
             "response_status": response.status_code,
         },
