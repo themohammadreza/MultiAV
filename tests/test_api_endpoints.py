@@ -87,6 +87,49 @@ def test_upload_returns_cached_for_duplicate(monkeypatch, client, api_key_header
     assert job2["job_id"] == job1["job_id"]
 
 
+def test_duplicate_with_different_api_key_creates_new_job(monkeypatch, client, celery_worker_instance):
+    configure_stub_engines(
+        monkeypatch,
+        {"api-cache": {"runner": lambda p: {"engine": "api-cache", "status": "ok"}, "timeout": 5}},
+    )
+
+    # key one
+    raw_key1 = secrets.token_urlsafe(16)
+    key_hash1 = hashlib.sha256(raw_key1.encode("utf-8")).hexdigest()
+    raw_key2 = secrets.token_urlsafe(16)
+    key_hash2 = hashlib.sha256(raw_key2.encode("utf-8")).hexdigest()
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                APIKey(key_hash=key_hash1, name="key-one", rate_limit_per_day=10),
+                APIKey(key_hash=key_hash2, name="key-two", rate_limit_per_day=10),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    content = b"duplicate content two keys"
+    r1 = client.post(
+        "/api/v1/scan/",
+        files={"file": ("f1.bin", content, "application/octet-stream")},
+        headers={"X-API-Key": raw_key1},
+    )
+    job1 = r1.json()
+
+    r2 = client.post(
+        "/api/v1/scan/",
+        files={"file": ("f2.bin", content, "application/octet-stream")},
+        headers={"X-API-Key": raw_key2},
+    )
+    job2 = r2.json()
+
+    assert job2["cached"] is False
+    assert job2["job_id"] != job1["job_id"]
+
+
 @pytest.mark.integration
 def test_get_results_401_without_api_key(client):
     response = client.get("/api/v1/results/00000000-0000-0000-0000-000000000001")

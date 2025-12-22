@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import health, results, scan, ui
+from app.db.migrations import run_migrations
 from app.services.orchestrator.registry import warm_up_active_engines
 from app.services.storage import get_storage_service
 
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
     from app.db.session import Base, SessionLocal, engine
 
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
 
     storage = get_storage_service()
     if storage.backend == "s3":
