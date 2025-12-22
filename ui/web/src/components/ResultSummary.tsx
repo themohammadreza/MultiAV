@@ -7,12 +7,12 @@ interface Props {
   summary: ResultSummaryData;
 }
 
-function formatTitleCase(value?: string | null) {
-  if (!value) return '';
+function formatTitleCase(value?: string | number | null) {
+  if (value === undefined || value === null || value === '') return '';
 
-  return value
-    .toString()
-    .replace(/[_-]+/g, ' ')
+  const normalized = typeof value === 'number' ? value.toString() : value.replace(/[_-]+/g, ' ');
+
+  return normalized
     .split(' ')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
@@ -49,12 +49,12 @@ function toTableRows(details: ResultSummaryData['details'] = {}) {
   return Object.entries(details).map(([engine, payload]) => ({
     engine,
     status: payload?.status ?? 'unknown',
-    verdict: (payload as any)?.verdict || (payload as any)?.detection_name || '',
-    signature: (payload as any)?.signature || (payload as any)?.rule || '',
-    severity: (payload as any)?.severity || (payload as any)?.severity_score || '',
+    verdict: (payload as any)?.verdict ?? (payload as any)?.detection_name ?? '',
+    signature: (payload as any)?.signature ?? (payload as any)?.rule ?? '',
+    severity: (payload as any)?.severity ?? (payload as any)?.severity_score ?? '',
     confidence: (payload as any)?.confidence ?? '',
-    duration: (payload as any)?.duration_ms || (payload as any)?.duration || '',
-    error: (payload as any)?.error || (payload as any)?.message || ''
+    duration: (payload as any)?.duration_ms ?? (payload as any)?.duration ?? '',
+    error: (payload as any)?.error ?? (payload as any)?.message ?? ''
   }));
 }
 
