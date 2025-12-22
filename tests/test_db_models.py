@@ -3,6 +3,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy import inspect
 
 from app.db.migrations import run_migrations
+from app.db.migrations import run_migrations
+
 from app.db.models import APIKey, ScanJob
 
 
@@ -43,3 +45,4 @@ def test_run_migrations_adds_api_key_id_column():
     inspector = inspect(engine)
     column_names = {col["name"] for col in inspector.get_columns("scan_jobs")}
     assert "api_key_id" in column_names
+
