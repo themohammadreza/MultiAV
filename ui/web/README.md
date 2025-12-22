@@ -5,7 +5,8 @@ Next.js + TypeScript UI using Mantine and TanStack Query. Uploads show inline re
 ## Configuration
 - Copy `.env.example` to `.env.local` and adjust API base URL/timeouts.
 - For local dev without CORS on the API, leave `NEXT_PUBLIC_API_BASE_URL` empty and set `API_PROXY_TARGET=http://localhost:8000` so Next.js proxies `/api/*` to the backend.
-- Feature flags: `NEXT_PUBLIC_FEATURE_HISTORY` controls client-side caching of uploads; `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB` guards file size.
+- `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB` guards file size for uploads.
+- The history page is backed by server data; client-side upload caching is disabled.
 
 ## Scripts
 - `npm run dev` – start dev server

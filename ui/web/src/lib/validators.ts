@@ -3,8 +3,7 @@ import { z } from 'zod';
 export const uploadFormSchema = z.object({
   file: z
     .instanceof(File)
-    .refine((file) => file.size > 0, { message: 'File cannot be empty' }),
-  cacheUpload: z.boolean().default(true)
+    .refine((file) => file.size > 0, { message: 'File cannot be empty' })
 });
 
 export type UploadFormValues = z.infer<typeof uploadFormSchema>;

@@ -1,14 +1,13 @@
 'use client';
 
-import { ActionIcon, Badge, Button, Card, FileButton, Flex, Group, Loader, Paper, Stack, Switch, Text, Title } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, FileButton, Flex, Group, Loader, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconUpload, IconX } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { addToHistory } from '@/lib/history-cache';
-import { isTerminal, submitScan } from '@/lib/api-client';
+import { submitScan } from '@/lib/api-client';
 import { loadConfig } from '@/lib/config';
 import { UploadFormValues, uploadFormSchema } from '@/lib/validators';
 import Link from 'next/link';
@@ -16,25 +15,13 @@ import { useJobPolling } from '@/hooks/useJobPolling';
 import { ResultSummaryCard } from '@/components/ResultSummary';
 
 const config = loadConfig();
-const MAX_CACHED_FILE_BYTES = 1024 * 1024; // localStorage is small; keep cached bytes conservative
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return btoa(binary);
-}
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const form = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadFormSchema),
-    defaultValues: { cacheUpload: true }
+    resolver: zodResolver(uploadFormSchema)
   });
   const jobQuery = useJobPolling(activeJobId || undefined);
 
@@ -53,38 +40,10 @@ export default function UploadPage() {
       }
       return submitScan(values.file);
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: (data) => {
       notifications.show({ title: 'Upload started', message: `Job ${data.job_id} ${data.status}`, color: 'blue' });
       setActiveJobId(data.job_id);
       queryClient.invalidateQueries({ queryKey: ['api-key-info'] });
-      const shouldPersistBytes = variables.cacheUpload && config.featureHistory;
-      let encoded: string | undefined;
-      if (shouldPersistBytes && variables.file) {
-        if (variables.file.size > MAX_CACHED_FILE_BYTES) {
-          notifications.show({
-            title: 'Upload cached without bytes',
-            message: `File is ${(variables.file.size / (1024 * 1024)).toFixed(1)}MB; too large to store in browser storage.`,
-            color: 'yellow'
-          });
-        } else {
-          const buffer = await variables.file.arrayBuffer();
-          encoded = arrayBufferToBase64(buffer);
-        }
-      }
-      if (config.featureHistory) {
-        addToHistory(
-          {
-            jobId: data.job_id,
-            fileName: variables.file?.name ?? 'unknown',
-            mimeType: variables.file?.type ?? 'application/octet-stream',
-            size: variables.file?.size ?? 0,
-            startedAt: data.scanned_at ?? new Date().toISOString(),
-            verdict: isTerminal(data.status) ? data.status : undefined,
-            fileData: encoded
-          },
-          shouldPersistBytes
-        );
-      }
     },
     onError: (error) => {
       notifications.show({ title: 'Upload failed', message: error.message, color: 'red' });
@@ -98,7 +57,7 @@ export default function UploadPage() {
         <Stack>
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
-              Max size {config.uploadSizeLimitMb}MB • Cached uploads allow re-scan without re-selecting the file.
+              Max size {config.uploadSizeLimitMb}MB.
             </Text>
             <Badge color="primary">API: {config.apiBaseUrl}</Badge>
           </Group>
@@ -147,22 +106,6 @@ export default function UploadPage() {
                   </Text>
                 )}
               </Stack>
-            )}
-          />
-
-          <Controller
-            control={form.control}
-            name="cacheUpload"
-            render={({ field }) => (
-              <Switch
-                label="Cache upload for re-scan (stores file client-side)"
-                checked={field.value}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                name={field.name}
-                disabled={mutation.isPending || !config.featureHistory}
-                
-              />
             )}
           />
 
