@@ -55,7 +55,9 @@ export function ResultSummaryCard({ summary }: Props) {
   return (
     <Stack gap="md">
       <Group justify="space-between">
-        <Title order={2}>Results</Title>
+        <Text fw={700} size="lg">
+          Summary
+        </Text>
         <Badge color={badgeColor}>{summary.status}</Badge>
       </Group>
 
@@ -76,16 +78,16 @@ export function ResultSummaryCard({ summary }: Props) {
                 Completed {summary.completed_at ? new Date(summary.completed_at).toLocaleString() : '—'}
               </Text>
             </Stack>
-        </Group>
+          </Group>
 
-        <Group align="flex-start" grow>
-          <Stack>
-            <Text fw={600}>Verdict</Text>
-            <Title order={3}>{summary.verdict || 'pending'}</Title>
-          </Stack>
-          <Stack>
-            <Text fw={600}>Severity</Text>
-            <Title order={3}>{summary.severity || 'informational'}</Title>
+          <Group align="flex-start" grow>
+            <Stack>
+              <Text fw={600}>Verdict</Text>
+              <Title order={3}>{summary.verdict || 'pending'}</Title>
+            </Stack>
+            <Stack>
+              <Text fw={600}>Severity</Text>
+              <Title order={3}>{summary.severity || 'informational'}</Title>
             </Stack>
             <Stack>
               <Text fw={600}>Confidence</Text>
