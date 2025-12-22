@@ -24,12 +24,14 @@ class ScanJob(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     file_id = Column(UUID(as_uuid=True), ForeignKey("files.id"))
+    api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=True)
     status = Column(String, default="pending...")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime(timezone=True)) 
 
     file = relationship("File", back_populates="jobs")
     results = relationship("EngineResult", back_populates="job")
+    api_key = relationship("APIKey", back_populates="jobs")
 
 
 class EngineResult(Base):
@@ -63,3 +65,5 @@ class APIKey(Base):
     )
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True, nullable=False)
+
+    jobs = relationship("ScanJob", back_populates="api_key")
