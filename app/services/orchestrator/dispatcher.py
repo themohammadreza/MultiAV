@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.models import EngineResult, ScanJob
@@ -75,49 +76,40 @@ def record_engine_result(job_id: str, engine: str, status: str, result: Dict) ->
             logger.warning("Dropping engine result for missing job %s (%s)", job_id, engine)
             return False
 
-        def _apply_update(target: EngineResult) -> None:
-            target.status = status
-            target.result = payload
-            target.scanned_at = datetime.now(timezone.utc)
-
-        existing = (
-            db.query(EngineResult)
-            .filter(EngineResult.job_id == normalized, EngineResult.engine == engine)
-            .first()
+        scanned_at = datetime.now(timezone.utc)
+        stmt = insert(EngineResult).values(
+            job_id=normalized,
+            engine=engine,
+            status=status,
+            result=payload,
+            scanned_at=scanned_at,
         )
 
-        if existing:
-            _apply_update(existing)
-            db.commit()
-            return True
-
-        try:
-            db.add(
-                EngineResult(
-                    job_id=normalized,
-                    engine=engine,
-                    status=status,
-                    result=payload,
-                )
+        if db.bind and db.bind.dialect.name == "postgresql":
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_engine_results_job_engine",
+                set_={
+                    "status": status,
+                    "result": payload,
+                    "scanned_at": scanned_at,
+                },
             )
-            db.commit()
-            return True
-        except IntegrityError:
-            # Another worker inserted concurrently; refresh and update.
-            db.rollback()
-            existing = (
-                db.query(EngineResult)
-                .filter(EngineResult.job_id == normalized, EngineResult.engine == engine)
-                .first()
+        else:
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[EngineResult.job_id, EngineResult.engine],
+                set_={
+                    "status": status,
+                    "result": payload,
+                    "scanned_at": scanned_at,
+                },
             )
-            if existing:
-                _apply_update(existing)
-                db.commit()
-                return True
-            logger.exception(
-                "IntegrityError persisting engine result for job %s engine %s", job_id, engine
-            )
-            return False
+        db.execute(stmt)
+        db.commit()
+        return True
+    except SQLAlchemyError:
+        logger.exception("Error persisting engine result for job %s engine %s", job_id, engine)
+        db.rollback()
+        return False
     finally:
         db.close()
 
