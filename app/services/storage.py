@@ -221,8 +221,11 @@ class StorageService:
 
         try:
             paginator = self._client.get_paginator("list_objects_v2")
-            objects = []
             total_size = 0
+            ttl_deleted_size = 0
+            ttl_delete_queue: list[str] = []
+            size_candidates: list[tuple[datetime, str, int]] = []
+            now = datetime.now(timezone.utc)
 
             for page in paginator.paginate(Bucket=self.bucket):
                 for obj in page.get("Contents", []):
@@ -233,36 +236,41 @@ class StorageService:
                         continue
                     if isinstance(last_modified, datetime) and last_modified.tzinfo is None:
                         last_modified = last_modified.replace(tzinfo=timezone.utc)
-                    objects.append((key, size, last_modified))
                     total_size += size
+                    if not isinstance(last_modified, datetime):
+                        continue
+                    try:
+                        age_seconds = (now - last_modified).total_seconds()
+                    except Exception:
+                        continue
+                    if age_seconds >= self.object_ttl_seconds:
+                        ttl_deleted_size += size
+                        ttl_delete_queue.append(key)
+                        if len(ttl_delete_queue) >= DELETE_BATCH_SIZE:
+                            self._delete_objects(ttl_delete_queue)
+                            ttl_delete_queue.clear()
+                        continue
+                    size_candidates.append((last_modified, key, size))
 
-            if not objects:
-                return
+            if ttl_delete_queue:
+                self._delete_objects(ttl_delete_queue)
+                ttl_delete_queue.clear()
 
-            now = datetime.now(timezone.utc)
-            keys_to_delete = set()
-
-            for key, size, last_modified in objects:
-                try:
-                    age_seconds = (now - last_modified).total_seconds()
-                except Exception:
-                    continue
-                if age_seconds >= self.object_ttl_seconds:
-                    keys_to_delete.add(key)
-
-            if total_size > self.max_bucket_bytes:
-                remaining_size = total_size
-                for key, size, last_modified in sorted(objects, key=lambda item: item[2]):
+            remaining_size = total_size - ttl_deleted_size
+            if remaining_size > self.max_bucket_bytes and size_candidates:
+                delete_batch: list[str] = []
+                for last_modified, key, size in sorted(
+                    size_candidates, key=lambda item: item[0]
+                ):
                     if remaining_size <= self.max_bucket_bytes:
                         break
-                    if key in keys_to_delete:
-                        remaining_size -= size
-                        continue
-                    keys_to_delete.add(key)
+                    delete_batch.append(key)
                     remaining_size -= size
-
-            if keys_to_delete:
-                self._delete_objects(list(keys_to_delete))
+                    if len(delete_batch) >= DELETE_BATCH_SIZE:
+                        self._delete_objects(delete_batch)
+                        delete_batch.clear()
+                if delete_batch:
+                    self._delete_objects(delete_batch)
         except Exception as exc:  # noqa: BLE001 - cleanup should not break uploads
             logger.warning("Skipping S3 cleanup due to error: %s", exc)
         finally:

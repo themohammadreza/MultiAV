@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -115,3 +116,100 @@ def test_schedule_ttl_cleanup_replaces_existing_timer(monkeypatch):
     assert created, "A new cleanup timer should be scheduled"
     assert created[0].started is True
     assert svc._cleanup_timer is created[0]
+
+
+@pytest.mark.unit
+def test_cleanup_bucket_batches_ttl_deletions():
+    class FakePaginator:
+        def __init__(self, pages):
+            self.pages = pages
+
+        def paginate(self, Bucket):  # noqa: N802 - boto3 signature
+            return self.pages
+
+    class FakeClient:
+        def __init__(self, pages):
+            self.pages = pages
+
+        def get_paginator(self, name):
+            assert name == "list_objects_v2"
+            return FakePaginator(self.pages)
+
+    svc = storage.StorageService.__new__(storage.StorageService)
+    svc.backend = "s3"
+    svc.bucket = "bucket"
+    svc.object_ttl_seconds = 10
+    svc.max_bucket_bytes = 10**9
+
+    now = datetime.now(timezone.utc)
+    total_objects = 2500
+    per_page = 500
+    pages = []
+    for start in range(0, total_objects, per_page):
+        contents = [
+            {
+                "Key": f"old-{idx}",
+                "LastModified": now - timedelta(seconds=20),
+                "Size": 1,
+            }
+            for idx in range(start, start + per_page)
+        ]
+        pages.append({"Contents": contents})
+
+    svc._client = FakeClient(pages)
+    deleted_batches: list[list[str]] = []
+    svc._delete_objects = lambda keys: deleted_batches.append(list(keys))
+
+    svc._cleanup_bucket()
+
+    deleted_keys = [key for batch in deleted_batches for key in batch]
+    assert len(deleted_keys) == total_objects
+    assert all(len(batch) <= storage.DELETE_BATCH_SIZE for batch in deleted_batches)
+
+
+@pytest.mark.unit
+def test_cleanup_bucket_prunes_oldest_for_max_bytes():
+    class FakePaginator:
+        def __init__(self, pages):
+            self.pages = pages
+
+        def paginate(self, Bucket):  # noqa: N802 - boto3 signature
+            return self.pages
+
+    class FakeClient:
+        def __init__(self, pages):
+            self.pages = pages
+
+        def get_paginator(self, name):
+            assert name == "list_objects_v2"
+            return FakePaginator(self.pages)
+
+    svc = storage.StorageService.__new__(storage.StorageService)
+    svc.backend = "s3"
+    svc.bucket = "bucket"
+    svc.object_ttl_seconds = 3600
+    svc.max_bucket_bytes = 500
+
+    now = datetime.now(timezone.utc)
+    objects = [
+        {
+            "Key": f"obj-{idx}",
+            "LastModified": now - timedelta(seconds=idx),
+            "Size": 100,
+        }
+        for idx in range(10)
+    ]
+    pages = [{"Contents": objects[:5]}, {"Contents": objects[5:]}]
+    svc._client = FakeClient(pages)
+
+    deleted_batches: list[list[str]] = []
+    svc._delete_objects = lambda keys: deleted_batches.append(list(keys))
+
+    svc._cleanup_bucket()
+
+    deleted_keys = [key for batch in deleted_batches for key in batch]
+    expected_keys = {
+        item["Key"]
+        for item in sorted(objects, key=lambda item: item["LastModified"])[:5]
+    }
+    assert set(deleted_keys) == expected_keys
