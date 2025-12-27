@@ -11,16 +11,30 @@
 ## GET /api/v1/results/{job_id}
 - **Response** (`ResultSummary`):
   - `job_id`, `status`, `verdict`, `confidence`, `severity`, `severity_score`, `engine_count`
-  - `started_at`, optional `completed_at`
+  - `started_at`, optional `completed_at`, optional `filename`
   - `families`, `primary_family`, `categories`, `signatures`
   - `details`: object keyed by engine name with vendor-specific fields (e.g., `status`, `signature`, `message`, `detected`, `scanned_at`)
 
 ## GET /api/v1/ui/jobs/recent
 - **Response** (`RecentJobsResponse`): `{ items: RecentJobItem[], count }` where each `RecentJobItem` has
-  `job_id`, `status`, optional `verdict`, optional `severity`, optional `sha256`, `started_at`, optional `completed_at`.
+  `job_id`, `status`, optional `verdict`, optional `severity`, optional `filename`, optional `sha256`, `started_at`, optional `completed_at`.
+
+## GET /api/v1/ui/api-key
+- **Response** (`ApiKeyStatusResponse`):
+  - `bypassed` (true when auth is disabled)
+  - `name`
+  - `rate_limit_per_day`
+  - `requests_used_today`
+  - `requests_remaining_today`
+  - `resets_at` (ISO timestamp)
+  - `expires_at` (ISO timestamp)
+  - `days_remaining`
 
 ## GET /api/v1/ui/engines/active
 - **Response** (`ActiveEnginesResponse`): `{ engines: { engine, timeout?, weight? }[] }`.
+
+## GET /api/v1/health
+- **Response**: `{ status: "ok" }`
 
 These shapes are mirrored in `src/lib/api-types.ts` and consumed by `src/lib/api-client.ts`, enabling typed data access
 throughout the UI.
