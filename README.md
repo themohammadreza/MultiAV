@@ -8,7 +8,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 - Provide clear APIs for uploading files, polling results, and wiring into other security workflows.
 
 ## Architecture at a glance
-- **API (FastAPI, `app/main.py`)**: exposes `/api/v1/scan/` to upload and `/api/v1/results/{job_id}` to retrieve aggregated verdicts.
+- **API (FastAPI, `app/main.py`)**: exposes `/api/v1/scan/` to upload and `/api/v1/results/{job_id}` to retrieve aggregated verdicts, plus UI helpers like `/api/v1/ui/api-key` and `/api/v1/health`.
 - **Worker (Celery, `app/workers/tasks.py`)**: orchestrates a Celery chord per scan: fan-out one task per enabled engines, then a fan-in callback to finalize the job.
 - **Orchestrator (`app/services/orchestrator/dispatcher.py`)**: loads enabled engines from `config/engines.yaml`, records per-engine results (one row per engine per job), updates job status, and returns aggregated summaries.
 - **Engines (`app/services/engines/*`)**:
@@ -22,7 +22,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 - **Container topology (`docker-compose.yml`)**: app API, worker, Postgres, Redis, ClamAV, Windows Defender, and MinIO wired together with healthchecks. Config is still mounted read-only; file-sharing volumes are no longer required between API/worker.
 
 ## Project layout
-- `app/main.py` — FastAPI app factory and router wiring; creates DB schema on startup for local/dev.
+- `app/main.py` — FastAPI app factory and router wiring; creates DB schema and applies lightweight migrations on startup for local/dev.
 - `app/api/v1/scan.py` — upload endpoint; hashes file, caches by SHA-256, enqueues Celery job.
 - `app/api/v1/results.py` — fetch results by job UUID; returns aggregated summary + per-engine details.
 - `app/services/orchestrator/dispatcher.py` — runs enabled engines in parallel via Celery chord, records success/error, updates job status.
@@ -32,6 +32,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 - `app/services/storage.py` — pluggable storage backend (S3/MinIO or local) that streams uploads and provides per-task temp copies.
 - `app/core/config.py` — environment-driven settings (DB/Redis/engine hosts, storage backend/object store config).
 - `app/db/models.py` & `app/db/session.py` — SQLAlchemy models and session/engine factory.
+- `app/db/migrations.py` — lightweight, idempotent schema updates (e.g., backfilling `api_key_id`, filenames) for deployments without Alembic.
 - `config/engines.yaml` — enable/disable engines and tune weights/timeouts.
 - `docker-compose.yml` — local stack definition; includes MinIO for object storage and mounts `./config` into app/worker.
 - `Dockerfile` — app image builder used by API and worker services.
@@ -69,6 +70,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 ### Auth & quotas
 - Required headers: `X-API-Key` for `POST /api/v1/scan/` and `GET /api/v1/results/{job_id}`.
 - Daily quota: `rate_limit_per_day` controls how many **new** scans a key can start per day; cached scans and results polling do not consume quota.
+- Cache scope: SHA-256 cache hits are scoped to the requesting API key (or anonymous if auth is bypassed) to avoid cross-tenant sharing.
 - Expiry: keys expire after `API_KEY_TTL_DAYS` (default 30). Renew with:
   ```bash
   docker compose exec app python scripts/manage_keys.py renew <name|uuid>
@@ -120,13 +122,16 @@ conda env export --from-history > environment.yml
 
 ## API surface (v1)
 - `POST /api/v1/scan/` — multipart upload (`file` field). Returns `{job_id, status, cached, scanned_at?}`.
-- `GET /api/v1/results/{job_id}` — aggregated verdict, severity/confidence, families/categories, and `details` keyed by engine.
-- `GET /api/v1/ui/jobs/recent` — lightweight feed of recent jobs with status/verdict/severity and SHA256.
+- `GET /api/v1/results/{job_id}` — aggregated verdict, severity/confidence, families/categories, `filename`, and `details` keyed by engine.
+- `GET /api/v1/ui/jobs/recent` — lightweight feed of recent jobs with status/verdict/severity, filename, and SHA256.
 - `GET /api/v1/ui/engines/active` — enumerates enabled engines with configured timeouts and weights.
+- `GET /api/v1/ui/api-key` — returns API key name, quota usage, and expiry metadata.
+- `GET /api/v1/health` — readiness probe used by the UI during startup.
 
 ## Frontends
 - **Next.js UI** (recommended): `ui/web` served on port 3000 via compose. Inline results render under the upload form; polling stops automatically when a job hits a terminal status. The results page uses the same summary layout and a download JSON action.
-  - Env: `NEXT_PUBLIC_API_BASE_URL` (defaults to `/` with compose proxy), `API_PROXY_TARGET` for reverse proxy, `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB`, `NEXT_PUBLIC_FEATURE_HISTORY` (enables client-side caching of uploads in localStorage).
+  - Env: `NEXT_PUBLIC_API_BASE_URL` (defaults to `/` with compose proxy), `API_PROXY_TARGET` for reverse proxy, `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB` (or legacy `NEXT_PUBLIC_UPLOAD_LIMIT_MB`), plus `NEXT_PUBLIC_POLL_INTERVAL_MS`/`NEXT_PUBLIC_POLL_TIMEOUT_MS` for status polling.
+  - The UI waits for `/api/v1/health` before showing routes and surfaces API key quota/expiry info from `/api/v1/ui/api-key`.
   - Local dev: `npm run dev` inside `ui/web`; compose already injects proxy vars.
 
 ## Roadmap / still to build

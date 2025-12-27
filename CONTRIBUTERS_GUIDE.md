@@ -20,6 +20,7 @@ Responsibilities:
 - Accept uploads (`POST /api/v1/scan/`)
 - Return aggregated results (`GET /api/v1/results/{job_id}`)
 - Provide UI helper endpoints (`/api/v1/ui/*`)
+- Provide a readiness check (`GET /api/v1/health`) used by the UI during startup
 - Enforce API key authentication and quotas
 
 Key files:
@@ -35,6 +36,7 @@ How it works:
 - Keys are stored hashed (`APIKey.key_hash`).
 - Keys can be bypassed in local development with `BYPASS_AUTH=true`.
 - Keys expire after `API_KEY_TTL_DAYS` (default: 30) using the key’s `created_at` timestamp as the subscription start.
+- `/api/v1/ui/api-key` reports key metadata (name, quota, expiry) for the UI.
 
 ### Rate limiting (daily quota)
 **Location:** `app/core/rate_limit.py`
@@ -43,6 +45,7 @@ How it works:
 - Quotas are **per day** (`APIKey.rate_limit_per_day`).
 - `POST /api/v1/scan/` consumes quota only for **new** scans (cached scans are free).
 - `GET /api/v1/results/{job_id}` is intentionally not consumed (polling is “free”).
+- Scan caching is scoped to the requesting API key (or anonymous if auth is bypassed) to prevent cross-tenant reuse.
 - Redis is used for counting when available; tests use an in-memory fallback.
 
 ### Worker (Celery)
@@ -109,11 +112,16 @@ Core entities:
 - `ScanJob`: one per scan request; tracks status + timestamps
 - `EngineResult`: one per engine per job (`(job_id, engine)` unique)
 - `APIKey`: API key metadata and quotas
+  - `File.filename` persists the original upload name when available.
+  - `ScanJob.api_key_id` associates jobs with API keys (nullable for bypassed auth).
 
 Invariants to preserve:
 - Job IDs are UUIDs; reject/normalize invalid IDs early (UI and API).
 - Job status progression: created/running => terminal (`done` | `done_with_errors` | `error`); terminal implies `completed_at` is set.
 - One `EngineResult` per `(job_id, engine)`; updates must not duplicate rows.
+
+Lightweight migrations:
+- `app/db/migrations.py` applies idempotent schema updates (e.g., adding `api_key_id`, `filename`) at startup for deployments without Alembic.
 
 ### UI (Next.js)
 **Location:** `ui/web/*`
@@ -143,7 +151,7 @@ This is the intended “billing integration” point: when a user renews a subsc
 ## End-to-end request flow
 1. User uploads a file via UI or `POST /api/v1/scan/`.
 2. API authenticates (`X-API-Key`) and checks daily quota.
-3. API stores the file and creates/returns a scan job.
+3. API stores the file and creates/returns a scan job (cache hits are per API key).
 4. Worker runs all enabled engines (in parallel) and persists results.
 5. Finalizer aggregates results and sets the terminal job state.
 6. UI polls `GET /api/v1/results/{job_id}` until terminal (polling doesn’t consume quota).
