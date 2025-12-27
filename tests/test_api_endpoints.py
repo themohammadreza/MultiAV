@@ -1,11 +1,12 @@
 import hashlib
 import secrets
 import time
+from datetime import datetime, timezone
 
 import pytest
 import httpx
 
-from app.db.models import APIKey
+from app.db.models import APIKey, File as FileModel, ScanJob
 from app.db.session import SessionLocal
 from tests.utils import configure_stub_engines
 
@@ -129,6 +130,46 @@ def test_duplicate_with_different_api_key_creates_new_job(monkeypatch, client, c
 
     assert job2["cached"] is False
     assert job2["job_id"] != job1["job_id"]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("status", ["error", "done_with_errors"])
+def test_duplicate_does_not_cache_terminal_errors(
+    status, client, api_key_header, celery_worker_instance
+):
+    content = b"error cache content"
+    digest = hashlib.sha256(content).hexdigest()
+    key_hash = hashlib.sha256(api_key_header["X-API-Key"].encode("utf-8")).hexdigest()
+
+    db = SessionLocal()
+    try:
+        api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
+        file_rec = FileModel(sha256=digest, path=f"/tmp/{digest}")
+        db.add(file_rec)
+        db.commit()
+        db.refresh(file_rec)
+
+        job = ScanJob(
+            file_id=file_rec.id,
+            api_key_id=api_key.id if api_key else None,
+            status=status,
+            completed_at=datetime.now(timezone.utc),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/v1/scan/",
+        files={"file": ("error.bin", content, "application/octet-stream")},
+        headers=api_key_header,
+    )
+
+    data = response.json()
+    assert data["cached"] is False
+    assert data["job_id"] != str(job.id)
 
 
 @pytest.mark.integration
