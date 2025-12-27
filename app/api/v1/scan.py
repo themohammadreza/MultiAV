@@ -48,15 +48,16 @@ async def upload_file(
         latest_job = latest_job_query.order_by(ScanJob.created_at.desc()).first()
 
         if latest_job:
-            # Convert UTC to Tehran time
-            first_scan = existing.uploaded_at.astimezone(iran_tz)
+            if latest_job.status not in {"error", "done_with_errors"}:
+                # Convert UTC to Tehran time
+                first_scan = existing.uploaded_at.astimezone(iran_tz)
 
-            return {
-                "job_id": latest_job.id,
-                "status": latest_job.status,
-                "cached": True,
-                "scanned_at": first_scan.isoformat(),
-            }
+                return {
+                    "job_id": latest_job.id,
+                    "status": latest_job.status,
+                    "cached": True,
+                    "scanned_at": first_scan.isoformat(),
+                }
 
     check_rate_limit(api_key, redis_client)
     _, location = await save_file(file)
