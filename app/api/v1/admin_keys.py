@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import AdminSession, get_admin_session
-from app.db.models import APIKey as APIKeyModel, ApiKeyUsage
+from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage
 from app.db.session import get_db
 
 
@@ -51,6 +51,20 @@ class ApiKeyScansResponse(BaseModel):
     total: int
 
 
+class ApiKeyAuditItem(BaseModel):
+    id: str
+    action: str
+    performed_by_username: str
+    created_at: datetime
+    metadata: dict | None = None
+
+
+class ApiKeyAuditResponse(BaseModel):
+    items: list[ApiKeyAuditItem]
+    count: int
+    total: int
+
+
 def _hash_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
@@ -70,6 +84,25 @@ def _get_key_or_404(db: Session, key_id: str) -> APIKeyModel:
     if not key:
         raise HTTPException(status_code=404, detail="API key not found")
     return key
+
+
+def _log_audit_entry(
+    db: Session,
+    *,
+    api_key_id: UUID,
+    action: str,
+    admin: AdminSession,
+    metadata: dict | None = None,
+) -> None:
+    db.add(
+        ApiKeyAuditLog(
+            api_key_id=api_key_id,
+            action=action,
+            performed_by_admin_id=admin.user_id,
+            performed_by_username=admin.username,
+            metadata_json=metadata,
+        )
+    )
 
 
 @router.get("", response_model=list[ApiKeyResponse])
@@ -96,7 +129,7 @@ def list_keys(
 @router.post("/", response_model=ApiKeyResponse)
 def create_key(
     payload: ApiKeyCreateRequest,
-    _: AdminSession = Depends(get_admin_session),
+    admin: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     raw_key, key_hash = _generate_key()
@@ -115,6 +148,13 @@ def create_key(
         is_active=True,
     )
     db.add(api_key)
+    _log_audit_entry(
+        db,
+        api_key_id=api_key.id,
+        action="create",
+        admin=admin,
+        metadata={"name": api_key.name, "rate_limit_per_day": api_key.rate_limit_per_day},
+    )
     db.commit()
     db.refresh(api_key)
 
@@ -133,11 +173,13 @@ def create_key(
 def update_key(
     key_id: str,
     payload: ApiKeyUpdateRequest,
-    _: AdminSession = Depends(get_admin_session),
+    admin: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     key = _get_key_or_404(db, key_id)
     changed = False
+    old_name = key.name
+    old_rate_limit = key.rate_limit_per_day
 
     if payload.name is not None:
         key.name = payload.name.strip()
@@ -160,7 +202,25 @@ def update_key(
     if not changed:
         raise HTTPException(status_code=400, detail="No changes requested")
 
+    action = "rotate" if payload.rotate else "update"
+    metadata: dict[str, object] = {}
+    if payload.name is not None:
+        metadata["old_name"] = old_name
+        metadata["new_name"] = key.name
+    if payload.rate_limit_per_day is not None:
+        metadata["old_rate_limit_per_day"] = old_rate_limit
+        metadata["new_rate_limit_per_day"] = key.rate_limit_per_day
+    if payload.rotate:
+        metadata["rotated"] = True
+
     db.add(key)
+    _log_audit_entry(
+        db,
+        api_key_id=key.id,
+        action=action,
+        admin=admin,
+        metadata=metadata or None,
+    )
     db.commit()
     db.refresh(key)
 
@@ -178,7 +238,7 @@ def update_key(
 @router.post("/{key_id}/revoke", response_model=ApiKeyResponse)
 def revoke_key(
     key_id: str,
-    _: AdminSession = Depends(get_admin_session),
+    admin: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     key = _get_key_or_404(db, key_id)
@@ -186,6 +246,13 @@ def revoke_key(
         key.revoked_at = datetime.now(timezone.utc)
         key.is_active = False
         db.add(key)
+        _log_audit_entry(
+            db,
+            api_key_id=key.id,
+            action="revoke",
+            admin=admin,
+            metadata={"revoked_at": key.revoked_at.isoformat()},
+        )
         db.commit()
         db.refresh(key)
 
@@ -228,3 +295,35 @@ def list_key_scans(
         for scan in scans
     ]
     return ApiKeyScansResponse(items=items, count=len(items), total=total)
+
+
+@router.get("/{key_id}/audit", response_model=ApiKeyAuditResponse)
+def list_key_audit_logs(
+    key_id: str,
+    _: AdminSession = Depends(get_admin_session),
+    db: Session = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    key = _get_key_or_404(db, key_id)
+    base_query = db.query(ApiKeyAuditLog).filter(ApiKeyAuditLog.api_key_id == key.id)
+    total = base_query.count()
+
+    logs = (
+        base_query.order_by(ApiKeyAuditLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        ApiKeyAuditItem(
+            id=str(log.id),
+            action=log.action,
+            performed_by_username=log.performed_by_username,
+            created_at=log.created_at,
+            metadata=log.metadata_json,
+        )
+        for log in logs
+    ]
+    return ApiKeyAuditResponse(items=items, count=len(items), total=total)

@@ -4,7 +4,7 @@ from sqlalchemy import inspect
 
 from app.db.migrations import run_migrations
 
-from app.db.models import APIKey, AdminUser, ApiKeyUsage, File, ScanJob
+from app.db.models import APIKey, AdminUser, ApiKeyAuditLog, ApiKeyUsage, File, ScanJob
 
 
 @pytest.mark.unit
@@ -51,6 +51,18 @@ def test_admin_user_columns():
     assert "created_at" in column_names
     assert "updated_at" in column_names
     assert "last_login_at" in column_names
+
+
+@pytest.mark.unit
+def test_api_key_audit_log_columns():
+    column_names = set(ApiKeyAuditLog.__table__.columns.keys())
+
+    assert "api_key_id" in column_names
+    assert "action" in column_names
+    assert "performed_by_admin_id" in column_names
+    assert "performed_by_username" in column_names
+    assert "created_at" in column_names
+    assert "metadata" in column_names
 
 
 @pytest.mark.unit
@@ -158,3 +170,16 @@ def test_run_migrations_creates_admin_users_table():
 
     inspector = inspect(engine)
     assert "admin_users" in inspector.get_table_names()
+
+
+@pytest.mark.unit
+def test_run_migrations_creates_api_key_audit_logs_table():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE api_keys (id TEXT PRIMARY KEY)"))
+        conn.execute(text("CREATE TABLE admin_users (id TEXT PRIMARY KEY)"))
+
+    run_migrations(engine)
+
+    inspector = inspect(engine)
+    assert "api_key_audit_logs" in inspector.get_table_names()

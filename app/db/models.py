@@ -72,6 +72,7 @@ class APIKey(Base):
 
     jobs = relationship("ScanJob", back_populates="api_key")
     usages = relationship("ApiKeyUsage", back_populates="api_key")
+    audit_logs = relationship("ApiKeyAuditLog", back_populates="api_key")
 
 
 class ApiKeyUsage(Base):
@@ -89,6 +90,21 @@ class ApiKeyUsage(Base):
 
     api_key = relationship("APIKey", back_populates="usages")
     job = relationship("ScanJob", back_populates="api_key_usage")
+
+
+class ApiKeyAuditLog(Base):
+    __tablename__ = "api_key_audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=False)
+    action = Column(String, nullable=False)
+    performed_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("admin_users.id"), nullable=False)
+    performed_by_username = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    metadata_json = Column("metadata", MutableDict.as_mutable(JSON))
+
+    api_key = relationship("APIKey", back_populates="audit_logs")
+    admin_user = relationship("AdminUser")
 
 
 class AdminUser(Base):
