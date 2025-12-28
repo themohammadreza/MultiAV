@@ -21,7 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { AdminUser } from '@/lib/api-types';
-import { createAdminUser, deleteAdminUser, listAdminUsers, updateAdminUser } from '@/lib/api-client';
+import { createAdminUser, deleteAdminUser, fetchAdminMe, listAdminUsers, updateAdminUser } from '@/lib/api-client';
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
@@ -49,9 +49,17 @@ export default function AdminUsersPage() {
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
 
+  const adminMe = useQuery({
+    queryKey: ['admin-me'],
+    queryFn: fetchAdminMe,
+    retry: false
+  });
+  const isSuperadmin = Boolean(adminMe.data?.is_superadmin);
+
   const usersQuery = useQuery({
     queryKey: ['admin-users'],
-    queryFn: listAdminUsers
+    queryFn: listAdminUsers,
+    enabled: isSuperadmin
   });
 
   const users = usersQuery.data ?? [];
@@ -120,6 +128,48 @@ export default function AdminUsersPage() {
       notifications.show({ title: 'Delete failed', message: error.message, color: 'red' });
     }
   });
+
+  if (adminMe.isLoading) {
+    return (
+      <Stack gap="lg">
+        <Title order={2}>Admin users</Title>
+        <Card withBorder>
+          <Text size="sm" c="dimmed">
+            Loading admin profile…
+          </Text>
+        </Card>
+      </Stack>
+    );
+  }
+
+  if (adminMe.isError) {
+    return (
+      <Stack gap="lg">
+        <Title order={2}>Admin users</Title>
+        <Card withBorder>
+          <Text size="sm" c="red">
+            Unable to confirm admin permissions.
+          </Text>
+        </Card>
+      </Stack>
+    );
+  }
+
+  if (!isSuperadmin) {
+    return (
+      <Stack gap="lg">
+        <Title order={2}>Admin users</Title>
+        <Card withBorder>
+          <Stack gap="xs">
+            <Text fw={600}>Superadmin access required</Text>
+            <Text size="sm" c="dimmed">
+              You do not have permission to manage admin accounts.
+            </Text>
+          </Stack>
+        </Card>
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap="lg">
