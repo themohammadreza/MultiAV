@@ -182,6 +182,23 @@ services:
       app:
         condition: service_healthy
 
+  admin-frontend:
+    build:
+      context: ./ui/admin
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://app:8000
+    image: multiav-admin-frontend:latest
+    container_name: multiav-admin-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "/"
+      API_PROXY_TARGET: http://app:8000
+    ports:
+      - "3001:3001"
+    depends_on:
+      app:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   clamav-db:

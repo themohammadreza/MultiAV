@@ -1,9 +1,11 @@
 import hashlib
 import secrets
+from datetime import datetime, timezone
+from uuid import uuid4
 
 import httpx
 
-from app.db.models import APIKey
+from app.db.models import APIKey, ApiKeyUsage, File, ScanJob
 from app.db.session import SessionLocal
 
 
@@ -57,3 +59,39 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert revoke_response.status_code == 200
     revoke_payload = revoke_response.json()
     assert revoke_payload["revoked_at"] is not None
+
+
+def test_list_key_scans(client: httpx.Client):
+    admin_key = _create_admin_key("admin")
+    db = SessionLocal()
+    try:
+        api_key = APIKey(key_hash=hashlib.sha256(b"client-key").hexdigest(), name="client", rate_limit_per_day=10)
+        db.add(api_key)
+        db.flush()
+        api_key_id = api_key.id
+        file_entry = File(id=uuid4(), sha256="a" * 64, path="/tmp/file", filename="sample.bin")
+        db.add(file_entry)
+        job = ScanJob(id=uuid4(), file_id=file_entry.id, api_key_id=api_key.id, status="done")
+        db.add(job)
+        job_id = job.id
+        usage = ApiKeyUsage(
+            api_key_id=api_key.id,
+            job_id=job.id,
+            status="done",
+            verdict="clean",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(usage)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/api/v1/admin/keys/{api_key_id}/scans",
+        headers={"X-API-Key": admin_key},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["count"] == 1
+    assert payload["items"][0]["job_id"] == str(job_id)

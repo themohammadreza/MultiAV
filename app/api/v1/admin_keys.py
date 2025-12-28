@@ -5,12 +5,12 @@ import hashlib
 import secrets
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_api_key
-from app.db.models import APIKey as APIKeyModel
+from app.db.models import APIKey as APIKeyModel, ApiKeyUsage
 from app.db.session import get_db
 
 
@@ -36,6 +36,19 @@ class ApiKeyResponse(BaseModel):
     revoked_at: datetime | None
     last_used_at: datetime | None
     raw_key: str | None = None
+
+
+class ApiKeyScanItem(BaseModel):
+    job_id: str
+    status: str
+    verdict: str | None = None
+    created_at: datetime
+
+
+class ApiKeyScansResponse(BaseModel):
+    items: list[ApiKeyScanItem]
+    count: int
+    total: int
 
 
 def _hash_key(raw_key: str) -> str:
@@ -182,3 +195,34 @@ def revoke_key(
         revoked_at=key.revoked_at,
         last_used_at=key.last_used_at,
     )
+
+
+@router.get("/{key_id}/scans", response_model=ApiKeyScansResponse)
+def list_key_scans(
+    key_id: str,
+    _: APIKeyModel | None = Depends(get_current_api_key),
+    db: Session = Depends(get_db),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    key = _get_key_or_404(db, key_id)
+    base_query = db.query(ApiKeyUsage).filter(ApiKeyUsage.api_key_id == key.id)
+    total = base_query.count()
+
+    scans = (
+        base_query.order_by(ApiKeyUsage.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        ApiKeyScanItem(
+            job_id=str(scan.job_id),
+            status=scan.status,
+            verdict=scan.verdict,
+            created_at=scan.created_at,
+        )
+        for scan in scans
+    ]
+    return ApiKeyScansResponse(items=items, count=len(items), total=total)
