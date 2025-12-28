@@ -72,6 +72,7 @@ def _get_key_or_404(db: Session, key_id: str) -> APIKeyModel:
     return key
 
 
+@router.get("", response_model=list[ApiKeyResponse])
 @router.get("/", response_model=list[ApiKeyResponse])
 def list_keys(
     _: APIKeyModel | None = Depends(get_current_api_key),
@@ -91,6 +92,7 @@ def list_keys(
     ]
 
 
+@router.post("", response_model=ApiKeyResponse)
 @router.post("/", response_model=ApiKeyResponse)
 def create_key(
     payload: ApiKeyCreateRequest,

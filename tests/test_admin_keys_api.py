@@ -61,6 +61,26 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert revoke_payload["revoked_at"] is not None
 
 
+def test_list_create_keys_without_trailing_slash(client: httpx.Client):
+    admin_key = _create_admin_key()
+
+    create_response = client.post(
+        "/api/v1/admin/keys",
+        json={"name": "service-no-slash", "rate_limit_per_day": 25},
+        headers={"X-API-Key": admin_key},
+    )
+    assert create_response.status_code == 200
+    key_id = create_response.json()["id"]
+
+    list_response = client.get(
+        "/api/v1/admin/keys",
+        headers={"X-API-Key": admin_key},
+    )
+    assert list_response.status_code == 200
+    keys = list_response.json()
+    assert any(item["id"] == key_id for item in keys)
+
+
 def test_list_key_scans(client: httpx.Client):
     admin_key = _create_admin_key("admin")
     db = SessionLocal()
