@@ -14,6 +14,8 @@ def test_api_key_rate_limit_column_renamed():
 
     assert "rate_limit_per_day" in column_names
     assert "rate_limit_per_miniute" not in column_names
+    assert "revoked_at" in column_names
+    assert "last_used_at" in column_names
 
 
 @pytest.mark.unit
@@ -85,3 +87,17 @@ def test_run_migrations_adds_filename_column():
     inspector = inspect(engine)
     column_names = {col["name"] for col in inspector.get_columns("files")}
     assert "filename" in column_names
+
+
+@pytest.mark.unit
+def test_run_migrations_adds_api_key_columns():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE api_keys (id TEXT PRIMARY KEY, name TEXT, key_hash TEXT)"))
+
+    run_migrations(engine)
+
+    inspector = inspect(engine)
+    column_names = {col["name"] for col in inspector.get_columns("api_keys")}
+    assert "revoked_at" in column_names
+    assert "last_used_at" in column_names

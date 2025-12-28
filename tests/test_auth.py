@@ -57,3 +57,26 @@ def test_rate_limit_enforcement(client: httpx.Client):
 
     assert last is not None
     assert last.status_code == 429
+
+
+def test_revoked_api_key_rejected(client: httpx.Client):
+    raw_key = _create_test_key(rate_limit_per_day=10)
+
+    db = SessionLocal()
+    try:
+        key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
+        assert api_key is not None
+        api_key.revoked_at = api_key.created_at
+        api_key.is_active = False
+        db.add(api_key)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/v1/scan/",
+        files={"file": ("test.bin", b"data")},
+        headers={"X-API-Key": raw_key},
+    )
+    assert response.status_code == 401
