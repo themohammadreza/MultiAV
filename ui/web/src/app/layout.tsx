@@ -11,7 +11,15 @@ export const metadata: Metadata = {
   title: 'MultiAV Frontend',
   description: 'Upload, scan, and view results',
   icons: {
-    icon: '/greenweb.svg'
+    icon: [
+      {
+        url: '/greenweb.svg',
+        type: 'image/svg+xml',
+        sizes: 'any'
+      }
+    ],
+    shortcut: '/greenweb.svg',
+    apple: '/greenweb.svg'
   }
 };
 
@@ -20,7 +28,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         <ColorSchemeScript />
-        <link rel="icon" type="image/svg+xml" href="/greenweb.svg" />
       </head>
       <body>
         <Providers>

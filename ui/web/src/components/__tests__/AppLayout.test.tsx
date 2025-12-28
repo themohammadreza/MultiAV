@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import type { ImgHTMLAttributes } from 'react';
 import type { Mock } from 'vitest';
 import { vi } from 'vitest';
 
@@ -9,6 +10,12 @@ import { fetchApiKeyStatus, fetchHealth } from '../../lib/api-client';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/'
+}));
+
+vi.mock('next/image', () => ({
+  default: ({ priority, unoptimized, ...props }: ImgHTMLAttributes<HTMLImageElement> & { priority?: boolean; unoptimized?: boolean }) => (
+    <img {...props} />
+  )
 }));
 
 vi.mock('../../lib/api-client', () => ({
@@ -68,5 +75,25 @@ describe('AppLayout', () => {
     );
 
     expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
+  });
+
+  it('renders the GreenWeb logo next to the title', async () => {
+    const mockedHealth = fetchHealth as unknown as Mock;
+    mockedHealth.mockResolvedValue({ status: 'ok' });
+
+    const client = new QueryClient();
+
+    render(
+      <QueryClientProvider client={client}>
+        <MantineProvider>
+          <AppLayout>
+            <div>content</div>
+          </AppLayout>
+        </MantineProvider>
+      </QueryClientProvider>
+    );
+
+    const logo = await screen.findByAltText('GreenWeb logo');
+    expect(logo).toHaveAttribute('src', '/greenweb.svg');
   });
 });
