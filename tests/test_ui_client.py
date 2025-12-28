@@ -69,6 +69,28 @@ def test_list_recent_jobs_and_engines():
     assert engines == [{"engine": "stub", "timeout": 10, "weight": 1.0}]
 
 
+def test_list_recent_jobs_scoped_per_api_key():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/ui/jobs/recent":
+            api_key = request.headers.get("X-API-Key")
+            if api_key == "key-a":
+                return httpx.Response(200, json={"items": [{"job_id": "a1", "filename": "alpha.bin"}]})
+            if api_key == "key-b":
+                return httpx.Response(200, json={"items": [{"job_id": "b1", "filename": "bravo.bin"}]})
+            return httpx.Response(401, json={"detail": "Invalid api_key"})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client_a = build_client(transport, api_key="key-a")
+    client_b = build_client(transport, api_key="key-b")
+
+    jobs_a = client_a.list_recent_jobs(limit=5)
+    jobs_b = client_b.list_recent_jobs(limit=5)
+
+    assert jobs_a == [{"job_id": "a1", "filename": "alpha.bin"}]
+    assert jobs_b == [{"job_id": "b1", "filename": "bravo.bin"}]
+
+
 def test_upload_response_missing_keys_raises():
     client = build_client(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
     with pytest.raises(ValueError):
