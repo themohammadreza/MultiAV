@@ -3,9 +3,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy import inspect
 
 from app.db.migrations import run_migrations
-from app.db.migrations import run_migrations
 
-from app.db.models import APIKey, ApiKeyUsage, File, ScanJob
+from app.db.models import APIKey, AdminUser, ApiKeyUsage, File, ScanJob
 
 
 @pytest.mark.unit
@@ -40,6 +39,18 @@ def test_file_has_filename_column():
     column_names = set(File.__table__.columns.keys())
 
     assert "filename" in column_names
+
+
+@pytest.mark.unit
+def test_admin_user_columns():
+    column_names = set(AdminUser.__table__.columns.keys())
+
+    assert "username" in column_names
+    assert "password_hash" in column_names
+    assert "is_superadmin" in column_names
+    assert "created_at" in column_names
+    assert "updated_at" in column_names
+    assert "last_login_at" in column_names
 
 
 @pytest.mark.unit
@@ -135,3 +146,15 @@ def test_run_migrations_creates_api_key_usages_table():
 
     inspector = inspect(engine)
     assert "api_key_usages" in inspector.get_table_names()
+
+
+@pytest.mark.unit
+def test_run_migrations_creates_admin_users_table():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE scan_jobs (id TEXT PRIMARY KEY)"))
+
+    run_migrations(engine)
+
+    inspector = inspect(engine)
+    assert "admin_users" in inspector.get_table_names()

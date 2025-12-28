@@ -77,6 +77,11 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
   ```
 - Local dev bypass: set `BYPASS_AUTH=true` for `app` and `worker` in `docker-compose.yml` (do not use in production).
 
+### Admin access
+- On startup, a default superadmin is seeded **only if no admin users exist**.
+- Defaults: username `superadmin`, password `mohammad`. Override with `ADMIN_DEFAULT_USERNAME` / `ADMIN_DEFAULT_PASSWORD`.
+- Rotate the superadmin password by logging into the admin UI and updating the account via the **Admin Users** page (superadmins only). For automation, call `PATCH /api/v1/admin/users/{user_id}` with a new `password`.
+
 **Conda users**: export a minimal environment spec from installed packages with:
 ```bash
 conda env export --from-history > environment.yml

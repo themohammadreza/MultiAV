@@ -1,0 +1,304 @@
+'use client';
+
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Modal,
+  PasswordInput,
+  Stack,
+  Switch,
+  Table,
+  Text,
+  TextInput,
+  Title
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import { AdminUser } from '@/lib/api-types';
+import { createAdminUser, deleteAdminUser, listAdminUsers, updateAdminUser } from '@/lib/api-client';
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
+export default function AdminUsersPage() {
+  const queryClient = useQueryClient();
+  const [createOpened, createModal] = useDisclosure(false);
+  const [editOpened, editModal] = useDisclosure(false);
+  const [deleteOpened, deleteModal] = useDisclosure(false);
+
+  const [createUsername, setCreateUsername] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createSuperadmin, setCreateSuperadmin] = useState(false);
+
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editUsername, setEditUsername] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editSuperadmin, setEditSuperadmin] = useState(false);
+
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  const usersQuery = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: listAdminUsers
+  });
+
+  const users = usersQuery.data ?? [];
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => a.username.localeCompare(b.username)),
+    [users]
+  );
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createAdminUser({
+        username: createUsername.trim(),
+        password: createPassword,
+        is_superadmin: createSuperadmin
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      notifications.show({
+        title: 'Admin created',
+        message: `${data.username} is ready.`,
+        color: 'green'
+      });
+      setCreateUsername('');
+      setCreatePassword('');
+      setCreateSuperadmin(false);
+      createModal.close();
+    },
+    onError: (error) => {
+      notifications.show({ title: 'Create failed', message: error.message, color: 'red' });
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: { userId: string; username?: string; password?: string; is_superadmin?: boolean }) =>
+      updateAdminUser(payload.userId, {
+        username: payload.username,
+        password: payload.password,
+        is_superadmin: payload.is_superadmin
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      notifications.show({
+        title: 'Admin updated',
+        message: `${data.username} was updated.`,
+        color: 'green'
+      });
+      editModal.close();
+    },
+    onError: (error) => {
+      notifications.show({ title: 'Update failed', message: error.message, color: 'red' });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => deleteAdminUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      notifications.show({
+        title: 'Admin removed',
+        message: 'The admin account has been deleted.',
+        color: 'orange'
+      });
+      deleteModal.close();
+    },
+    onError: (error) => {
+      notifications.show({ title: 'Delete failed', message: error.message, color: 'red' });
+    }
+  });
+
+  return (
+    <Stack gap="lg">
+      <Group justify="space-between">
+        <Title order={2}>Admin users</Title>
+        <Button onClick={createModal.open}>Add admin</Button>
+      </Group>
+
+      <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
+        <Stack>
+          <TextInput
+            label="Username"
+            value={createUsername}
+            onChange={(event) => setCreateUsername(event.currentTarget.value)}
+          />
+          <PasswordInput
+            label="Temporary password"
+            value={createPassword}
+            onChange={(event) => setCreatePassword(event.currentTarget.value)}
+          />
+          <Switch
+            label="Grant superadmin access"
+            checked={createSuperadmin}
+            onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={createModal.close}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                createMutation.mutate();
+              }}
+              disabled={!createUsername.trim() || !createPassword}
+            >
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={editOpened} onClose={editModal.close} title="Update admin user" centered>
+        <Stack>
+          <TextInput
+            label="Username"
+            value={editUsername}
+            onChange={(event) => setEditUsername(event.currentTarget.value)}
+          />
+          <PasswordInput
+            label="Reset password"
+            value={editPassword}
+            onChange={(event) => setEditPassword(event.currentTarget.value)}
+          />
+          <Switch
+            label="Superadmin access"
+            checked={editSuperadmin}
+            onChange={(event) => setEditSuperadmin(event.currentTarget.checked)}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={editModal.close}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editingUser) return;
+                const trimmedUsername = editUsername.trim();
+                const payload: { userId: string; username?: string; password?: string; is_superadmin?: boolean } = {
+                  userId: editingUser.id
+                };
+                if (trimmedUsername && trimmedUsername !== editingUser.username) {
+                  payload.username = trimmedUsername;
+                }
+                if (editPassword) {
+                  payload.password = editPassword;
+                }
+                if (editSuperadmin !== editingUser.is_superadmin) {
+                  payload.is_superadmin = editSuperadmin;
+                }
+                if (!payload.username && !payload.password && payload.is_superadmin === undefined) {
+                  notifications.show({
+                    title: 'No changes',
+                    message: 'Update at least one field before saving.',
+                    color: 'yellow'
+                  });
+                  return;
+                }
+                updateMutation.mutate(payload);
+              }}
+            >
+              Save changes
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete admin user?" centered>
+        <Stack>
+          <Text>
+            This will permanently remove <strong>{deleteUser?.username}</strong>.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={deleteModal.close}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                if (!deleteUser) return;
+                deleteMutation.mutate(deleteUser.id);
+              }}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Card withBorder>
+        <Table striped highlightOnHover>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Username</Table.Th>
+              <Table.Th>Role</Table.Th>
+              <Table.Th>Last login</Table.Th>
+              <Table.Th>Updated</Table.Th>
+              <Table.Th />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {sortedUsers.map((user) => (
+              <Table.Tr key={user.id}>
+                <Table.Td>
+                  <Text fw={600}>{user.username}</Text>
+                </Table.Td>
+                <Table.Td>
+                  <Badge color={user.is_superadmin ? 'blue' : 'gray'} variant="light">
+                    {user.is_superadmin ? 'Superadmin' : 'Admin'}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>{formatDate(user.last_login_at)}</Table.Td>
+                <Table.Td>{formatDate(user.updated_at)}</Table.Td>
+                <Table.Td>
+                  <Group gap="xs" justify="flex-end">
+                    <ActionIcon
+                      variant="default"
+                      aria-label="Edit admin"
+                      onClick={() => {
+                        setEditingUser(user);
+                        setEditUsername(user.username);
+                        setEditPassword('');
+                        setEditSuperadmin(user.is_superadmin);
+                        editModal.open();
+                      }}
+                    >
+                      <IconPencil size={16} />
+                    </ActionIcon>
+                    <ActionIcon
+                      variant="default"
+                      color="red"
+                      aria-label="Delete admin"
+                      onClick={() => {
+                        setDeleteUser(user);
+                        deleteModal.open();
+                      }}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+        {sortedUsers.length === 0 && (
+          <Text size="sm" c="dimmed" ta="center" mt="sm">
+            No admin users found.
+          </Text>
+        )}
+      </Card>
+    </Stack>
+  );
+}

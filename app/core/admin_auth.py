@@ -5,18 +5,21 @@ import hashlib
 import hmac
 import json
 import os
-import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 
+from app.core.admin_seed import ensure_default_admin
+from app.core.security import verify_password
+from app.db.models import AdminUser
+from app.db.session import get_db
 
 ADMIN_AUTH_COOKIE_NAME = "admin_session"
 ADMIN_AUTH_TTL_SECONDS = int(os.getenv("ADMIN_AUTH_TTL_SECONDS", "3600"))
 ADMIN_AUTH_SECRET = os.getenv("ADMIN_AUTH_SECRET", "change-me")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 ADMIN_AUTH_COOKIE_SECURE = os.getenv("ADMIN_AUTH_COOKIE_SECURE", "false").strip().lower() in {
     "1",
     "true",
@@ -27,7 +30,9 @@ ADMIN_AUTH_COOKIE_SECURE = os.getenv("ADMIN_AUTH_COOKIE_SECURE", "false").strip(
 
 @dataclass(frozen=True)
 class AdminSession:
+    user_id: UUID
     username: str
+    is_superadmin: bool
     expires_at: datetime | None
 
 
@@ -48,11 +53,12 @@ def _get_secret_bytes() -> bytes:
     return ADMIN_AUTH_SECRET.encode("utf-8")
 
 
-def create_admin_token(username: str) -> tuple[str, datetime]:
+def create_admin_token(user: AdminUser) -> tuple[str, datetime]:
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(seconds=ADMIN_AUTH_TTL_SECONDS)
     payload = {
-        "sub": username,
+        "sub": str(user.id),
+        "username": user.username,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
@@ -63,7 +69,7 @@ def create_admin_token(username: str) -> tuple[str, datetime]:
     return token, expires_at
 
 
-def verify_admin_token(token: str) -> AdminSession:
+def verify_admin_token(token: str) -> tuple[UUID, datetime]:
     try:
         payload_part, signature_part = token.split(".", 1)
     except ValueError:
@@ -80,9 +86,9 @@ def verify_admin_token(token: str) -> AdminSession:
     except json.JSONDecodeError:
         raise HTTPException(status_code=401, detail="Invalid admin session")
 
-    username = payload.get("sub")
+    user_id_value = payload.get("sub")
     exp = payload.get("exp")
-    if not isinstance(username, str) or not username:
+    if not isinstance(user_id_value, str) or not user_id_value:
         raise HTTPException(status_code=401, detail="Invalid admin session")
     if not isinstance(exp, int):
         raise HTTPException(status_code=401, detail="Invalid admin session")
@@ -91,21 +97,30 @@ def verify_admin_token(token: str) -> AdminSession:
     if expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Admin session expired")
 
-    return AdminSession(username=username, expires_at=expires_at)
+    try:
+        user_id = UUID(user_id_value)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid admin session")
+
+    return user_id, expires_at
 
 
-def validate_admin_credentials(username: str, password: str) -> None:
+def validate_admin_credentials(db: Session, username: str, password: str) -> AdminUser:
     if _bypass_enabled():
-        return
+        admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+        if admin:
+            return admin
 
-    if not secrets.compare_digest(username, ADMIN_USERNAME) or not secrets.compare_digest(password, ADMIN_PASSWORD):
+    admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+    if not admin or not verify_password(password, admin.password_hash):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    return admin
 
 
-def get_admin_session(request: Request) -> AdminSession:
-    if _bypass_enabled():
-        return AdminSession(username=ADMIN_USERNAME or "admin", expires_at=None)
-
+def get_admin_session(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AdminSession:
     token = None
     auth_header = request.headers.get("Authorization")
     if auth_header:
@@ -119,4 +134,26 @@ def get_admin_session(request: Request) -> AdminSession:
     if not token:
         raise HTTPException(status_code=401, detail="Missing admin session")
 
-    return verify_admin_token(token)
+    if _bypass_enabled():
+        admin = db.query(AdminUser).order_by(AdminUser.created_at.asc()).first()
+        if not admin:
+            admin = ensure_default_admin(db)
+        if not admin:
+            raise HTTPException(status_code=401, detail="Missing admin session")
+        return AdminSession(
+            user_id=admin.id,
+            username=admin.username,
+            is_superadmin=admin.is_superadmin,
+            expires_at=None,
+        )
+
+    user_id, expires_at = verify_admin_token(token)
+    admin = db.query(AdminUser).filter(AdminUser.id == user_id).first()
+    if not admin:
+        raise HTTPException(status_code=401, detail="Invalid admin session")
+    return AdminSession(
+        user_id=admin.id,
+        username=admin.username,
+        is_superadmin=admin.is_superadmin,
+        expires_at=expires_at,
+    )

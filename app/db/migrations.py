@@ -29,6 +29,9 @@ def run_migrations(engine: Engine) -> None:
     if "api_key_usages" not in table_names:
         _create_api_key_usages_table(engine)
 
+    if "admin_users" not in table_names:
+        _create_admin_users_table(engine)
+
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
     """Backfill the api_key_id column on scan_jobs if missing."""
@@ -107,6 +110,42 @@ def _create_api_key_usages_table(engine: Engine) -> None:
                 "status TEXT NOT NULL, "
                 "verdict TEXT, "
                 "UNIQUE (api_key_id, job_id)"
+                ")"
+            )
+        )
+
+
+def _create_admin_users_table(engine: Engine) -> None:
+    """Create the admin_users table if missing."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS admin_users ("
+                    "id UUID PRIMARY KEY, "
+                    "username TEXT NOT NULL UNIQUE, "
+                    "password_hash TEXT NOT NULL, "
+                    "is_superadmin BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "created_at TIMESTAMP, "
+                    "updated_at TIMESTAMP, "
+                    "last_login_at TIMESTAMP"
+                    ")"
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_admin_users_username ON admin_users (username)"))
+            return
+
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS admin_users ("
+                "id TEXT PRIMARY KEY, "
+                "username TEXT NOT NULL UNIQUE, "
+                "password_hash TEXT NOT NULL, "
+                "is_superadmin BOOLEAN NOT NULL DEFAULT 0, "
+                "created_at TIMESTAMP, "
+                "updated_at TIMESTAMP, "
+                "last_login_at TIMESTAMP"
                 ")"
             )
         )
