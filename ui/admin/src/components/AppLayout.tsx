@@ -54,6 +54,7 @@ export function AppLayout({ children }: PropsWithChildren) {
 
   const isAuthenticated = Boolean(adminMe.data?.username);
   const isSuperadmin = Boolean(adminMe.data?.is_superadmin);
+  const requiresSuperadmin = links.some((link) => link.superadminOnly && link.href === pathname);
 
   useEffect(() => {
     if (!healthReady) return;
@@ -70,6 +71,18 @@ export function AppLayout({ children }: PropsWithChildren) {
       router.replace('/');
     }
   }, [healthReady, isAuthenticated, isLoginPage, router]);
+
+  useEffect(() => {
+    if (!healthReady || !isAuthenticated || isLoginPage) return;
+    if (requiresSuperadmin && !isSuperadmin) {
+      notifications.show({
+        title: 'Access denied',
+        message: 'Superadmin privileges are required to manage admins.',
+        color: 'red'
+      });
+      router.replace('/account');
+    }
+  }, [healthReady, isAuthenticated, isLoginPage, isSuperadmin, requiresSuperadmin, router]);
 
   return (
     <AppShell
@@ -105,6 +118,11 @@ export function AppLayout({ children }: PropsWithChildren) {
               <Badge color={isAuthenticated ? 'green' : 'gray'} variant="light">
                 {isAuthenticated ? 'Authenticated' : 'Signed out'}
               </Badge>
+              {isAuthenticated && (
+                <Text size="xs" c="dimmed">
+                  {adminMe.data?.username} · {isSuperadmin ? 'Superadmin' : 'Admin'}
+                </Text>
+              )}
               {isAuthenticated && (
                 <ActionIcon
                   variant="default"
