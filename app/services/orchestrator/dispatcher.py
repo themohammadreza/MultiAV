@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.db.models import EngineResult, ScanJob
+from app.db.models import ApiKeyUsage, EngineResult, ScanJob
 from app.db.session import SessionLocal
 from app.services.aggregator.summary import summarize_job
 from app.services.orchestrator.registry import get_active_engines
@@ -121,6 +121,34 @@ def record_dispatch_error(job_id: str, message: str) -> None:
     mark_job_status(job_id, "error", completed=True)
 
 
+def _upsert_api_key_usage(
+    db: Session,
+    api_key_id: UUID,
+    job_id: UUID,
+    status: str,
+    verdict: str | None,
+) -> None:
+    stmt = insert(ApiKeyUsage).values(
+        api_key_id=api_key_id,
+        job_id=job_id,
+        status=status,
+        verdict=verdict,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    if db.bind and db.bind.dialect.name == "postgresql":
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_api_key_usages_key_job",
+            set_={"status": status, "verdict": verdict},
+        )
+    else:
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[ApiKeyUsage.api_key_id, ApiKeyUsage.job_id],
+            set_={"status": status, "verdict": verdict},
+        )
+    db.execute(stmt)
+
+
 def finalize_job_summary(job_id: str) -> Optional[dict]:
     """Mark job completion and return an aggregated summary."""
     normalized = _normalize_job_id(job_id)
@@ -149,10 +177,21 @@ def finalize_job_summary(job_id: str) -> Optional[dict]:
             job.status = "done"
 
         job.completed_at = datetime.now(timezone.utc)
+        summary = summarize_job(job, engine_results)
+
+        if job.api_key_id:
+            _upsert_api_key_usage(
+                db,
+                job.api_key_id,
+                job.id,
+                job.status,
+                summary.get("verdict"),
+            )
+
         db.commit()
         db.refresh(job)
 
-        return summarize_job(job, engine_results)
+        return summary
     finally:
         db.close()
 

@@ -33,6 +33,7 @@ class ScanJob(Base):
     file = relationship("File", back_populates="jobs")
     results = relationship("EngineResult", back_populates="job")
     api_key = relationship("APIKey", back_populates="jobs")
+    api_key_usage = relationship("ApiKeyUsage", back_populates="job", uselist=False)
 
 
 class EngineResult(Base):
@@ -70,3 +71,21 @@ class APIKey(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     jobs = relationship("ScanJob", back_populates="api_key")
+    usages = relationship("ApiKeyUsage", back_populates="api_key")
+
+
+class ApiKeyUsage(Base):
+    __tablename__ = "api_key_usages"
+    __table_args__ = (
+        UniqueConstraint("api_key_id", "job_id", name="uq_api_key_usages_key_job"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("scan_jobs.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    status = Column(String, nullable=False)
+    verdict = Column(String)
+
+    api_key = relationship("APIKey", back_populates="usages")
+    job = relationship("ScanJob", back_populates="api_key_usage")

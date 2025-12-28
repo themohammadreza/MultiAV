@@ -26,6 +26,9 @@ def run_migrations(engine: Engine) -> None:
         if "last_used_at" not in api_key_columns:
             _add_api_keys_column(engine, "last_used_at", "TIMESTAMP")
 
+    if "api_key_usages" not in table_names:
+        _create_api_key_usages_table(engine)
+
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
     """Backfill the api_key_id column on scan_jobs if missing."""
@@ -70,3 +73,40 @@ def _add_api_keys_column(engine: Engine, column: str, column_type: str) -> None:
             return
 
         conn.execute(text(f"ALTER TABLE api_keys ADD COLUMN {column}"))
+
+
+def _create_api_key_usages_table(engine: Engine) -> None:
+    """Create the api_key_usages table if missing."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS api_key_usages ("
+                    "id UUID PRIMARY KEY, "
+                    "api_key_id UUID NOT NULL, "
+                    "job_id UUID NOT NULL, "
+                    "created_at TIMESTAMP, "
+                    "status TEXT NOT NULL, "
+                    "verdict TEXT, "
+                    "CONSTRAINT uq_api_key_usages_key_job UNIQUE (api_key_id, job_id), "
+                    "CONSTRAINT fk_api_key_usages_api_key FOREIGN KEY(api_key_id) REFERENCES api_keys (id), "
+                    "CONSTRAINT fk_api_key_usages_job FOREIGN KEY(job_id) REFERENCES scan_jobs (id)"
+                    ")"
+                )
+            )
+            return
+
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS api_key_usages ("
+                "id TEXT PRIMARY KEY, "
+                "api_key_id TEXT NOT NULL, "
+                "job_id TEXT NOT NULL, "
+                "created_at TIMESTAMP, "
+                "status TEXT NOT NULL, "
+                "verdict TEXT, "
+                "UNIQUE (api_key_id, job_id)"
+                ")"
+            )
+        )
