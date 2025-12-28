@@ -119,7 +119,10 @@ export function AppLayout({ children }: PropsWithChildren) {
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <Title order={3}>MultiAV</Title>
+            <Group gap="xs" align="center">
+              <img src="/greenweb.svg" alt="MultiAV Logo" style={{ width: 28, height: 28 }} />
+              <Title order={3}>MultiAV</Title>
+            </Group>
           </Group>
           <Stack gap={2} align="flex-end">
             <Group gap="xs">
