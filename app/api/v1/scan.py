@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 import hashlib
 from uuid import uuid4
@@ -7,7 +8,7 @@ import pytz
 
 from app.services.storage import compute_sha256, save_file
 from app.db.session import get_db
-from app.db.models import APIKey as APIKeyModel, File as FileModel, ScanJob
+from app.db.models import APIKey as APIKeyModel, ApiKeyUsage, File as FileModel, ScanJob
 from app.workers.tasks import run_scan
 
 from app.core.config import settings
@@ -79,6 +80,26 @@ async def upload_file(
         api_key_id=api_key.id if api_key else None,
     )
     db.add(job)
+    db.flush()
+
+    if api_key:
+        usage_stmt = insert(ApiKeyUsage).values(
+            api_key_id=api_key.id,
+            job_id=job.id,
+            status="queued",
+            verdict=None,
+            created_at=datetime.now(timezone.utc),
+        )
+        if db.bind and db.bind.dialect.name == "postgresql":
+            usage_stmt = usage_stmt.on_conflict_do_nothing(
+                constraint="uq_api_key_usages_key_job"
+            )
+        else:
+            usage_stmt = usage_stmt.on_conflict_do_nothing(
+                index_elements=[ApiKeyUsage.api_key_id, ApiKeyUsage.job_id]
+            )
+        db.execute(usage_stmt)
+
     db.commit()
     db.refresh(job)
 

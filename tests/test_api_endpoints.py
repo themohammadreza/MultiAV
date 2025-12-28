@@ -2,11 +2,12 @@ import hashlib
 import secrets
 import time
 from datetime import datetime, timezone
+import uuid
 
 import pytest
 import httpx
 
-from app.db.models import APIKey, File as FileModel, ScanJob
+from app.db.models import APIKey, ApiKeyUsage, File as FileModel, ScanJob
 from app.db.session import SessionLocal
 from tests.utils import configure_stub_engines
 
@@ -61,6 +62,21 @@ def test_upload_scan_retrieve_flow(monkeypatch, client: httpx.Client, api_key_he
     assert result["verdict"] == "clean"
     assert result["filename"] == "test.txt"
     assert "api-test" in result["details"]
+
+    key_hash = hashlib.sha256(api_key_header["X-API-Key"].encode("utf-8")).hexdigest()
+    with SessionLocal() as session:
+        api_key = session.query(APIKey).filter(APIKey.key_hash == key_hash).first()
+        usage = (
+            session.query(ApiKeyUsage)
+            .filter(ApiKeyUsage.job_id == uuid.UUID(job_id))
+            .one()
+        )
+
+    assert api_key is not None
+    assert usage.api_key_id == api_key.id
+    assert usage.status == "done"
+    assert usage.verdict == "clean"
+    assert usage.created_at is not None
 
 
 @pytest.mark.integration
