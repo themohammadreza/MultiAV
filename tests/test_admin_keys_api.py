@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 import hashlib
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 
-from app.db.models import APIKey, ApiKeyUsage, File, ScanJob
+from app.db.models import APIKey, ApiKeyAuditLog, ApiKeyUsage, File, ScanJob
 from app.db.session import SessionLocal
 
 
@@ -56,6 +56,58 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert revoke_response.status_code == 200
     revoke_payload = revoke_response.json()
     assert revoke_payload["revoked_at"] is not None
+
+
+def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
+    headers = _login_admin(client)
+
+    create_response = client.post(
+        "/api/v1/admin/keys/",
+        json={"name": "audit-service", "rate_limit_per_day": 75},
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    key_id = create_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}",
+        json={"name": "audit-service-updated", "rate_limit_per_day": 80},
+        headers=headers,
+    )
+    assert update_response.status_code == 200
+
+    rotate_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}",
+        json={"rotate": True},
+        headers=headers,
+    )
+    assert rotate_response.status_code == 200
+
+    revoke_response = client.post(
+        f"/api/v1/admin/keys/{key_id}/revoke",
+        headers=headers,
+    )
+    assert revoke_response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        logs = (
+            db.query(ApiKeyAuditLog)
+            .filter(ApiKeyAuditLog.api_key_id == UUID(key_id))
+            .all()
+        )
+    finally:
+        db.close()
+
+    actions = {log.action for log in logs}
+    assert actions == {"create", "update", "rotate", "revoke"}
+    assert len(logs) == 4
+    assert all(log.performed_by_username == "admin" for log in logs)
+    update_log = next(log for log in logs if log.action == "update")
+    assert update_log.metadata_json["old_name"] == "audit-service"
+    assert update_log.metadata_json["new_name"] == "audit-service-updated"
+    assert update_log.metadata_json["old_rate_limit_per_day"] == 75
+    assert update_log.metadata_json["new_rate_limit_per_day"] == 80
 
 
 def test_list_create_keys_without_trailing_slash(client: httpx.Client):

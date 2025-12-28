@@ -32,6 +32,9 @@ def run_migrations(engine: Engine) -> None:
     if "admin_users" not in table_names:
         _create_admin_users_table(engine)
 
+    if "api_key_audit_logs" not in table_names:
+        _create_api_key_audit_logs_table(engine)
+
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
     """Backfill the api_key_id column on scan_jobs if missing."""
@@ -146,6 +149,43 @@ def _create_admin_users_table(engine: Engine) -> None:
                 "created_at TIMESTAMP, "
                 "updated_at TIMESTAMP, "
                 "last_login_at TIMESTAMP"
+                ")"
+            )
+        )
+
+
+def _create_api_key_audit_logs_table(engine: Engine) -> None:
+    """Create the api_key_audit_logs table if missing."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS api_key_audit_logs ("
+                    "id UUID PRIMARY KEY, "
+                    "api_key_id UUID NOT NULL, "
+                    "action TEXT NOT NULL, "
+                    "performed_by_admin_id UUID NOT NULL, "
+                    "performed_by_username TEXT NOT NULL, "
+                    "created_at TIMESTAMP, "
+                    "metadata JSON, "
+                    "CONSTRAINT fk_api_key_audit_logs_api_key FOREIGN KEY(api_key_id) REFERENCES api_keys (id), "
+                    "CONSTRAINT fk_api_key_audit_logs_admin_user FOREIGN KEY(performed_by_admin_id) REFERENCES admin_users (id)"
+                    ")"
+                )
+            )
+            return
+
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS api_key_audit_logs ("
+                "id TEXT PRIMARY KEY, "
+                "api_key_id TEXT NOT NULL, "
+                "action TEXT NOT NULL, "
+                "performed_by_admin_id TEXT NOT NULL, "
+                "performed_by_username TEXT NOT NULL, "
+                "created_at TIMESTAMP, "
+                "metadata TEXT"
                 ")"
             )
         )
