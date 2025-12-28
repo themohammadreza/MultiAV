@@ -1,8 +1,11 @@
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+import hashlib
+import io
 
 import pytest
+from starlette.datastructures import UploadFile
 
 botocore_exceptions = pytest.importorskip("botocore.exceptions")
 ClientError = botocore_exceptions.ClientError
@@ -120,6 +123,27 @@ def test_ensure_local_copy_falls_back_to_existing_local_file():
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
+
+
+@pytest.mark.anyio
+async def test_save_file_uses_hashed_paths_for_local_storage(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage.settings, "STORAGE_BACKEND", "local")
+    monkeypatch.setattr(storage.settings, "STORAGE_PATH", str(tmp_path))
+
+    file_content = b"hash-me"
+    upload = UploadFile(
+        filename="sample.txt",
+        file=io.BytesIO(file_content),
+    )
+
+    service = StorageService()
+    digest, location = await service.save_file(upload)
+
+    expected_digest = hashlib.sha256(file_content).hexdigest()
+    expected_path = tmp_path / expected_digest / "original"
+    assert digest == expected_digest
+    assert location == str(expected_path)
+    assert expected_path.read_bytes() == file_content
 
 
 @mock_s3

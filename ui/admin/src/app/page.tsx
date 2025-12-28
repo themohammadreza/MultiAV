@@ -147,7 +147,18 @@ export default function AdminKeysPage() {
             value={editRateLimit}
             min={0}
             max={100000}
-            onChange={setEditRateLimit}
+            onChange={(value) => {
+              if (value === '') {
+                setEditRateLimit('');
+                return;
+              }
+              if (typeof value === 'number') {
+                setEditRateLimit(value);
+                return;
+              }
+              const parsed = Number(value);
+              setEditRateLimit(Number.isNaN(parsed) ? '' : parsed);
+            }}
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={editModal.close}>
@@ -257,7 +268,18 @@ export default function AdminKeysPage() {
               value={createRateLimit}
               min={0}
               max={100000}
-              onChange={setCreateRateLimit}
+              onChange={(value) => {
+                if (value === '') {
+                  setCreateRateLimit('');
+                  return;
+                }
+                if (typeof value === 'number') {
+                  setCreateRateLimit(value);
+                  return;
+                }
+                const parsed = Number(value);
+                setCreateRateLimit(Number.isNaN(parsed) ? '' : parsed);
+              }}
               style={{ maxWidth: 200 }}
             />
             <Button
