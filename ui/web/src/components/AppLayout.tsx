@@ -4,6 +4,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconKey } from '@tabler/icons-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PropsWithChildren, useEffect, useState } from 'react';
@@ -119,7 +120,18 @@ export function AppLayout({ children }: PropsWithChildren) {
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <Title order={3}>MultiAV</Title>
+            <Group gap="xs" align="center">
+              <Image
+                src="/greenweb.svg"
+                alt="GreenWeb logo"
+                width={28}
+                height={28}
+                priority
+                unoptimized
+                style={{ display: 'block' }}
+              />
+              <Title order={3}>MultiAV</Title>
+            </Group>
           </Group>
           <Stack gap={2} align="flex-end">
             <Group gap="xs">

@@ -9,7 +9,18 @@ import { AppLayout } from '@/components/AppLayout';
 
 export const metadata: Metadata = {
   title: 'MultiAV Frontend',
-  description: 'Upload, scan, and view results'
+  description: 'Upload, scan, and view results',
+  icons: {
+    icon: [
+      {
+        url: '/greenweb.svg',
+        type: 'image/svg+xml',
+        sizes: 'any'
+      }
+    ],
+    shortcut: '/greenweb.svg',
+    apple: '/greenweb.svg'
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

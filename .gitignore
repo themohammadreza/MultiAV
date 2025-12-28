@@ -217,3 +217,4 @@ pyrightconfig.json
 # Frontend artifacts
 ui/web/.next/
 ui/web/node_modules/
+node_modules/
