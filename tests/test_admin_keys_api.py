@@ -95,3 +95,52 @@ def test_list_key_scans(client: httpx.Client):
     assert payload["total"] == 1
     assert payload["count"] == 1
     assert payload["items"][0]["job_id"] == str(job_id)
+
+
+def test_admin_key_invalid_uuid_returns_404(client: httpx.Client):
+    admin_key = _create_admin_key()
+
+    update_response = client.patch(
+        "/api/v1/admin/keys/not-a-uuid",
+        json={"name": "nope"},
+        headers={"X-API-Key": admin_key},
+    )
+    assert update_response.status_code == 404
+
+    revoke_response = client.post(
+        "/api/v1/admin/keys/not-a-uuid/revoke",
+        headers={"X-API-Key": admin_key},
+    )
+    assert revoke_response.status_code == 404
+
+    scans_response = client.get(
+        "/api/v1/admin/keys/not-a-uuid/scans",
+        headers={"X-API-Key": admin_key},
+    )
+    assert scans_response.status_code == 404
+
+
+def test_revoked_key_rejected_for_ui_requests(client: httpx.Client):
+    admin_key = _create_admin_key()
+
+    create_response = client.post(
+        "/api/v1/admin/keys/",
+        json={"name": "client", "rate_limit_per_day": 10},
+        headers={"X-API-Key": admin_key},
+    )
+    assert create_response.status_code == 200
+    payload = create_response.json()
+    key_id = payload["id"]
+    raw_key = payload["raw_key"]
+
+    revoke_response = client.post(
+        f"/api/v1/admin/keys/{key_id}/revoke",
+        headers={"X-API-Key": admin_key},
+    )
+    assert revoke_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/ui/jobs/recent",
+        headers={"X-API-Key": raw_key},
+    )
+    assert response.status_code == 401

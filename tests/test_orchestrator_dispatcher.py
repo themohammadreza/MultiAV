@@ -2,9 +2,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from uuid import UUID
 
-from app.db.models import EngineResult, ScanJob
+import hashlib
+
+from app.db.models import APIKey, ApiKeyUsage, EngineResult, File, ScanJob
 from app.db.session import SessionLocal
-from app.services.orchestrator.dispatcher import record_engine_result
+from app.services.orchestrator.dispatcher import finalize_job_summary, record_engine_result
 
 
 def _create_job() -> str:
@@ -84,3 +86,39 @@ def test_record_engine_result_is_idempotent_under_concurrency():
     assert final_result.result["status"] in {"success", "error"}
     assert final_result.result["attempt"] in {1, 2}
     assert _count_results(job_id, engine) == 1
+
+
+def test_finalize_job_summary_updates_api_key_usage():
+    with SessionLocal() as session:
+        api_key = APIKey(
+            key_hash=hashlib.sha256(b"client-key").hexdigest(),
+            name="client",
+            rate_limit_per_day=100,
+        )
+        file_record = File(sha256="deadbeef", path="/tmp/file", filename="sample.bin")
+        job = ScanJob(file=file_record, api_key=api_key, status="running...")
+        result = EngineResult(
+            job=job,
+            engine="stub",
+            status="success",
+            result={"engine": "stub", "status": "ok", "verdict": "clean"},
+        )
+        session.add_all([api_key, file_record, job, result])
+        session.commit()
+        job_id = str(job.id)
+
+    summary = finalize_job_summary(job_id)
+    assert summary is not None
+    assert summary["verdict"] == "clean"
+
+    with SessionLocal() as session:
+        usage = (
+            session.query(ApiKeyUsage)
+            .filter(ApiKeyUsage.job_id == job.id)
+            .one()
+        )
+        refreshed_job = session.query(ScanJob).filter(ScanJob.id == job.id).one()
+
+    assert usage.status == refreshed_job.status
+    assert usage.verdict == "clean"
+    assert refreshed_job.completed_at is not None
