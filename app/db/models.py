@@ -58,6 +58,8 @@ class APIKey(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     key_hash = Column(String(64), unique=True, index=True, nullable=False)  # sha256 hash of the raw key
     name = Column(String, nullable=False)  # e.g: frontend-service
+    revoked_at = Column(DateTime(timezone=True))
+    last_used_at = Column(DateTime(timezone=True))
     rate_limit_per_day = Column(
         "rate_limit_per_day",
         Integer,

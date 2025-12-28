@@ -19,6 +19,13 @@ def run_migrations(engine: Engine) -> None:
         if "filename" not in file_columns:
             _add_files_filename(engine)
 
+    if "api_keys" in table_names:
+        api_key_columns = {col["name"] for col in inspector.get_columns("api_keys")}
+        if "revoked_at" not in api_key_columns:
+            _add_api_keys_column(engine, "revoked_at", "TIMESTAMP")
+        if "last_used_at" not in api_key_columns:
+            _add_api_keys_column(engine, "last_used_at", "TIMESTAMP")
+
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
     """Backfill the api_key_id column on scan_jobs if missing."""
@@ -52,3 +59,14 @@ def _add_files_filename(engine: Engine) -> None:
             return
 
         conn.execute(text("ALTER TABLE files ADD COLUMN filename"))
+
+
+def _add_api_keys_column(engine: Engine, column: str, column_type: str) -> None:
+    """Add missing column to api_keys."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(text(f"ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+            return
+
+        conn.execute(text(f"ALTER TABLE api_keys ADD COLUMN {column}"))

@@ -33,12 +33,14 @@ def get_current_api_key(
         db.query(APIKeyModel)
         .filter(
             APIKeyModel.key_hash == key_hash,
-            APIKeyModel.is_active.is_(True),
         )
         .first()
     )
 
     if not db_key:
+        raise HTTPException(status_code=401, detail="Invalid api_key")
+
+    if db_key.revoked_at is not None or getattr(db_key, "is_active", True) is False:
         raise HTTPException(status_code=401, detail="Invalid api_key")
 
     created_at = db_key.created_at
@@ -52,5 +54,9 @@ def get_current_api_key(
     now = datetime.now(timezone.utc)
     if expires_at <= now:
         raise HTTPException(status_code=401, detail="API key expired")
+
+    db_key.last_used_at = now
+    db.add(db_key)
+    db.commit()
 
     return db_key
