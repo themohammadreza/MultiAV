@@ -1,4 +1,4 @@
-import { AdminApiKey, AdminAuthResponse, AdminKeyScansResponse, AdminMeResponse } from './api-types';
+import { AdminApiKey, AdminAuthResponse, AdminKeyScansResponse, AdminMeResponse, AdminUser } from './api-types';
 import { loadConfig } from './config';
 import { getAdminToken } from './admin-auth';
 
@@ -123,4 +123,50 @@ export async function fetchAdminKeyScans(keyId: string, limit: number, offset: n
     withAuth()
   );
   return handleResponse<AdminKeyScansResponse>(response);
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const response = await fetch(`${apiBase}/api/v1/admin/users/`, withAuth());
+  return handleResponse<AdminUser[]>(response);
+}
+
+export async function createAdminUser(payload: {
+  username: string;
+  password: string;
+  is_superadmin?: boolean;
+}): Promise<AdminUser> {
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/users/`,
+    withAuth({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  );
+  return handleResponse<AdminUser>(response);
+}
+
+export async function updateAdminUser(
+  userId: string,
+  payload: { username?: string; password?: string; is_superadmin?: boolean }
+): Promise<AdminUser> {
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/users/${userId}`,
+    withAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  );
+  return handleResponse<AdminUser>(response);
+}
+
+export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
+  const response = await fetch(`${apiBase}/api/v1/admin/users/${userId}`, withAuth({ method: 'DELETE' }));
+  return handleResponse<{ ok: boolean }>(response);
+}
+
+export async function fetchAdminProfile(): Promise<AdminUser> {
+  const response = await fetch(`${apiBase}/api/v1/admin/users/me`, withAuth());
+  return handleResponse<AdminUser>(response);
 }

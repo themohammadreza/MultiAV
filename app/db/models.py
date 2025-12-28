@@ -89,3 +89,19 @@ class ApiKeyUsage(Base):
 
     api_key = relationship("APIKey", back_populates="usages")
     job = relationship("ScanJob", back_populates="api_key_usage")
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    username = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    is_superadmin = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    last_login_at = Column(DateTime(timezone=True))

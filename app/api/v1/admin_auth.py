@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.admin_auth import (
     ADMIN_AUTH_COOKIE_NAME,
@@ -14,6 +15,7 @@ from app.core.admin_auth import (
     get_admin_session,
     validate_admin_credentials,
 )
+from app.db.session import get_db
 
 
 router = APIRouter()
@@ -30,14 +32,19 @@ class AdminLoginResponse(BaseModel):
 
 
 class AdminMeResponse(BaseModel):
+    id: str
     username: str
+    is_superadmin: bool
     expires_at: datetime | None = None
 
 
 @router.post("/login", response_model=AdminLoginResponse)
-def admin_login(payload: AdminLoginRequest, response: Response):
-    validate_admin_credentials(payload.username, payload.password)
-    token, expires_at = create_admin_token(payload.username)
+def admin_login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)):
+    admin = validate_admin_credentials(db, payload.username, payload.password)
+    token, expires_at = create_admin_token(admin)
+    admin.last_login_at = datetime.now(timezone.utc)
+    db.add(admin)
+    db.commit()
     response.set_cookie(
         ADMIN_AUTH_COOKIE_NAME,
         token,
@@ -57,4 +64,9 @@ def admin_logout(response: Response):
 
 @router.get("/me", response_model=AdminMeResponse)
 def admin_me(session: AdminSession = Depends(get_admin_session)):
-    return AdminMeResponse(username=session.username, expires_at=session.expires_at)
+    return AdminMeResponse(
+        id=str(session.user_id),
+        username=session.username,
+        is_superadmin=session.is_superadmin,
+        expires_at=session.expires_at,
+    )

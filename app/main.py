@@ -5,8 +5,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import admin_auth, admin_keys, health, results, scan, ui
+from app.api.v1 import admin_auth, admin_keys, admin_users, health, results, scan, ui
 from app.db.migrations import run_migrations
+from app.core.admin_seed import ensure_default_admin
 from app.services.orchestrator.registry import warm_up_active_engines
 from app.services.storage import get_storage_service
 
@@ -20,6 +21,11 @@ async def lifespan(app: FastAPI):
 
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
+    db = SessionLocal()
+    try:
+        ensure_default_admin(db)
+    finally:
+        db.close()
 
     storage = get_storage_service()
     if storage.backend == "s3":
@@ -67,3 +73,4 @@ app.include_router(results.router, prefix="/api/v1/results", tags=["Results"])
 app.include_router(ui.router, prefix="/api/v1/ui", tags=["UI"])
 app.include_router(admin_keys.router, prefix="/api/v1/admin/keys", tags=["Admin Keys"])
 app.include_router(admin_auth.router, prefix="/api/v1/admin/auth", tags=["Admin Auth"])
+app.include_router(admin_users.router, prefix="/api/v1/admin/users", tags=["Admin Users"])

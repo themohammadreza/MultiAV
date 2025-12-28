@@ -4,7 +4,9 @@ export interface AdminAuthResponse {
 }
 
 export interface AdminMeResponse {
+  id: string;
   username: string;
+  is_superadmin: boolean;
   expires_at?: string | null;
 }
 
@@ -29,4 +31,13 @@ export interface AdminKeyScansResponse {
   items: AdminKeyScanItem[];
   count: number;
   total: number;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  is_superadmin: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login_at?: string | null;
 }

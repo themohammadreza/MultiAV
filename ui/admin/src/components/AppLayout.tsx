@@ -23,7 +23,11 @@ import { PropsWithChildren, useEffect } from 'react';
 import { clearAdminToken } from '@/lib/admin-auth';
 import { ApiError, fetchAdminMe, fetchHealth, logoutAdmin } from '@/lib/api-client';
 
-const links = [{ label: 'API Keys', href: '/' }];
+const links = [
+  { label: 'API Keys', href: '/' },
+  { label: 'Admin Users', href: '/admin-users', superadminOnly: true },
+  { label: 'My Account', href: '/account' }
+];
 
 export function AppLayout({ children }: PropsWithChildren) {
   const [opened, { toggle }] = useDisclosure();
@@ -49,6 +53,7 @@ export function AppLayout({ children }: PropsWithChildren) {
   });
 
   const isAuthenticated = Boolean(adminMe.data?.username);
+  const isSuperadmin = Boolean(adminMe.data?.is_superadmin);
 
   useEffect(() => {
     if (!healthReady) return;
@@ -137,7 +142,15 @@ export function AppLayout({ children }: PropsWithChildren) {
           <AppShell.Section grow component={ScrollArea}>
             <Stack gap="xs">
               {links.map((link) => (
-                <NavLink component={Link} key={link.href} href={link.href as any} label={link.label} active={pathname === link.href} />
+                (link.superadminOnly && !isSuperadmin) ? null : (
+                  <NavLink
+                    component={Link}
+                    key={link.href}
+                    href={link.href as any}
+                    label={link.label}
+                    active={pathname === link.href}
+                  />
+                )
               ))}
             </Stack>
           </AppShell.Section>
