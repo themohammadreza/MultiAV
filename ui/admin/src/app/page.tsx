@@ -268,7 +268,18 @@ export default function AdminKeysPage() {
               value={createRateLimit}
               min={0}
               max={100000}
-              onChange={setCreateRateLimit}
+              onChange={(value) => {
+                if (value === '') {
+                  setCreateRateLimit('');
+                  return;
+                }
+                if (typeof value === 'number') {
+                  setCreateRateLimit(value);
+                  return;
+                }
+                const parsed = Number(value);
+                setCreateRateLimit(Number.isNaN(parsed) ? '' : parsed);
+              }}
               style={{ maxWidth: 200 }}
             />
             <Button
