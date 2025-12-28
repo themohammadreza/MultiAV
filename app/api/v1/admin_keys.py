@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_current_api_key
+from app.core.admin_auth import AdminSession, get_admin_session
 from app.db.models import APIKey as APIKeyModel, ApiKeyUsage
 from app.db.session import get_db
 
@@ -75,7 +75,7 @@ def _get_key_or_404(db: Session, key_id: str) -> APIKeyModel:
 @router.get("", response_model=list[ApiKeyResponse])
 @router.get("/", response_model=list[ApiKeyResponse])
 def list_keys(
-    _: APIKeyModel | None = Depends(get_current_api_key),
+    _: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     keys = db.query(APIKeyModel).order_by(APIKeyModel.created_at.desc()).all()
@@ -96,7 +96,7 @@ def list_keys(
 @router.post("/", response_model=ApiKeyResponse)
 def create_key(
     payload: ApiKeyCreateRequest,
-    _: APIKeyModel | None = Depends(get_current_api_key),
+    _: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     raw_key, key_hash = _generate_key()
@@ -133,7 +133,7 @@ def create_key(
 def update_key(
     key_id: str,
     payload: ApiKeyUpdateRequest,
-    _: APIKeyModel | None = Depends(get_current_api_key),
+    _: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     key = _get_key_or_404(db, key_id)
@@ -178,7 +178,7 @@ def update_key(
 @router.post("/{key_id}/revoke", response_model=ApiKeyResponse)
 def revoke_key(
     key_id: str,
-    _: APIKeyModel | None = Depends(get_current_api_key),
+    _: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
 ):
     key = _get_key_or_404(db, key_id)
@@ -202,7 +202,7 @@ def revoke_key(
 @router.get("/{key_id}/scans", response_model=ApiKeyScansResponse)
 def list_key_scans(
     key_id: str,
-    _: APIKeyModel | None = Depends(get_current_api_key),
+    _: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),

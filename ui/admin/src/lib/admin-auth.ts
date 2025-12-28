@@ -1,16 +1,16 @@
-const STORAGE_KEY = 'multiav-api-key';
+const STORAGE_KEY = 'multiav-admin-token';
 
-export function getApiKey(): string | null {
+export function getAdminToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const key = window.localStorage.getItem(STORAGE_KEY);
-    return key && key.trim().length ? key.trim() : null;
+    const token = window.localStorage.getItem(STORAGE_KEY);
+    return token && token.trim().length ? token.trim() : null;
   } catch {
     return null;
   }
 }
 
-export function setApiKey(value: string): void {
+export function setAdminToken(value: string): void {
   if (typeof window === 'undefined') return;
   const trimmed = (value || '').trim();
   try {
@@ -24,7 +24,7 @@ export function setApiKey(value: string): void {
   }
 }
 
-export function clearApiKey(): void {
+export function clearAdminToken(): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(STORAGE_KEY);

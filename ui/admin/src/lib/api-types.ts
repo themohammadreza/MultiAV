@@ -1,12 +1,11 @@
-export interface ApiKeyStatusResponse {
-  bypassed?: boolean;
-  name?: string;
-  rate_limit_per_day?: number;
-  requests_used_today?: number;
-  requests_remaining_today?: number | null;
-  resets_at?: string | null;
-  expires_at?: string;
-  days_remaining?: number;
+export interface AdminAuthResponse {
+  token: string;
+  expires_at: string;
+}
+
+export interface AdminMeResponse {
+  username: string;
+  expires_at?: string | null;
 }
 
 export interface AdminApiKey {

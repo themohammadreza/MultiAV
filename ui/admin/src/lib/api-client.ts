@@ -1,6 +1,6 @@
-import { ApiKeyStatusResponse, AdminApiKey, AdminKeyScansResponse } from './api-types';
+import { AdminApiKey, AdminAuthResponse, AdminKeyScansResponse, AdminMeResponse } from './api-types';
 import { loadConfig } from './config';
-import { getApiKey } from './api-key';
+import { getAdminToken } from './admin-auth';
 
 const config = loadConfig();
 const apiBase = config.apiBaseUrl.replace(/\/+$/, '');
@@ -27,9 +27,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       // ignore invalid JSON
     }
-    if (response.status === 401 && !getApiKey()) {
-      message = message ? `${message} (set X-API-Key in the UI)` : 'Unauthorized (set X-API-Key in the UI)';
-    }
     throw new ApiError(message, response.status);
   }
 
@@ -45,33 +42,57 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 function authHeaders(): HeadersInit | undefined {
-  const apiKey = getApiKey();
-  if (!apiKey) return undefined;
-  return { 'X-API-Key': apiKey };
+  const token = getAdminToken();
+  if (!token) return undefined;
+  return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchApiKeyStatus(): Promise<ApiKeyStatusResponse> {
-  const response = await fetch(`${apiBase}/api/v1/ui/api-key`, { headers: authHeaders() });
-  return handleResponse<ApiKeyStatusResponse>(response);
+function withAuth(options: RequestInit = {}): RequestInit {
+  const headers = { ...(options.headers || {}), ...(authHeaders() ?? {}) };
+  return { ...options, headers, credentials: 'include' };
+}
+
+export async function loginAdmin(payload: { username: string; password: string }): Promise<AdminAuthResponse> {
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/auth/login`,
+    withAuth({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  );
+  return handleResponse<AdminAuthResponse>(response);
+}
+
+export async function logoutAdmin(): Promise<{ ok: boolean }> {
+  const response = await fetch(`${apiBase}/api/v1/admin/auth/logout`, withAuth({ method: 'POST' }));
+  return handleResponse<{ ok: boolean }>(response);
+}
+
+export async function fetchAdminMe(): Promise<AdminMeResponse> {
+  const response = await fetch(`${apiBase}/api/v1/admin/auth/me`, withAuth());
+  return handleResponse<AdminMeResponse>(response);
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${apiBase}/api/v1/health`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/health`, withAuth());
   return handleResponse<{ status: string }>(response);
 }
 
 export async function listAdminKeys(): Promise<AdminApiKey[]> {
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/admin/keys/`, withAuth());
   return handleResponse<AdminApiKey[]>(response);
 }
 
 export async function createAdminKey(payload: { name: string; rate_limit_per_day?: number | null }): Promise<AdminApiKey> {
-  const headers = authHeaders() ?? {};
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(payload)
-  });
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/keys/`,
+    withAuth({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  );
   return handleResponse<AdminApiKey>(response);
 }
 
@@ -79,25 +100,27 @@ export async function updateAdminKey(
   keyId: string,
   payload: { name?: string; rate_limit_per_day?: number | null; rotate?: boolean }
 ): Promise<AdminApiKey> {
-  const headers = authHeaders() ?? {};
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(payload)
-  });
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/keys/${keyId}`,
+    withAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  );
   return handleResponse<AdminApiKey>(response);
 }
 
 export async function revokeAdminKey(keyId: string): Promise<AdminApiKey> {
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/revoke`, {
-    method: 'POST',
-    headers: authHeaders()
-  });
+  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/revoke`, withAuth({ method: 'POST' }));
   return handleResponse<AdminApiKey>(response);
 }
 
 export async function fetchAdminKeyScans(keyId: string, limit: number, offset: number): Promise<AdminKeyScansResponse> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/scans?${params.toString()}`, { headers: authHeaders() });
+  const response = await fetch(
+    `${apiBase}/api/v1/admin/keys/${keyId}/scans?${params.toString()}`,
+    withAuth()
+  );
   return handleResponse<AdminKeyScansResponse>(response);
 }

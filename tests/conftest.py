@@ -64,6 +64,10 @@ os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 os.environ.setdefault("STORAGE_BACKEND", "local")
 os.environ.setdefault("STORAGE_PATH", _storage_dir)
+os.environ.setdefault("ADMIN_USERNAME", "admin")
+os.environ.setdefault("ADMIN_PASSWORD", "admin")
+os.environ.setdefault("ADMIN_AUTH_SECRET", "test-secret")
+os.environ.setdefault("ADMIN_AUTH_TTL_SECONDS", "3600")
 
 
 @pytest.fixture(scope="session", autouse=True)
