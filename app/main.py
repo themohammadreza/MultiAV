@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import admin_keys, health, results, scan, ui
+from app.api.v1 import admin_auth, admin_keys, health, results, scan, ui
 from app.db.migrations import run_migrations
 from app.services.orchestrator.registry import warm_up_active_engines
 from app.services.storage import get_storage_service
@@ -66,3 +66,4 @@ app.include_router(scan.router, prefix="/api/v1/scan", tags=["Scan"])
 app.include_router(results.router, prefix="/api/v1/results", tags=["Results"])
 app.include_router(ui.router, prefix="/api/v1/ui", tags=["UI"])
 app.include_router(admin_keys.router, prefix="/api/v1/admin/keys", tags=["Admin Keys"])
+app.include_router(admin_auth.router, prefix="/api/v1/admin/auth", tags=["Admin Auth"])
