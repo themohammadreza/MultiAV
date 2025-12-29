@@ -170,6 +170,30 @@ def test_run_migrations_creates_admin_users_table():
 
     inspector = inspect(engine)
     assert "admin_users" in inspector.get_table_names()
+    column_names = {col["name"] for col in inspector.get_columns("admin_users")}
+    assert "is_active" in column_names
+
+
+@pytest.mark.unit
+def test_run_migrations_adds_admin_user_is_active():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE admin_users ("
+                "id TEXT PRIMARY KEY, "
+                "username TEXT NOT NULL UNIQUE, "
+                "password_hash TEXT NOT NULL, "
+                "is_superadmin BOOLEAN NOT NULL DEFAULT 0"
+                ")"
+            )
+        )
+
+    run_migrations(engine)
+
+    inspector = inspect(engine)
+    column_names = {col["name"] for col in inspector.get_columns("admin_users")}
+    assert "is_active" in column_names
 
 
 @pytest.mark.unit
