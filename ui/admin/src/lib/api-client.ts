@@ -54,7 +54,7 @@ function withAuth(options: RequestInit = {}): RequestInit {
 
 export async function loginAdmin(payload: { username: string; password: string }): Promise<AdminAuthResponse> {
   const response = await fetch(
-    `${apiBase}/api/v1/admin/auth/login`,
+    `${apiBase}/api/v1/admin/auth/login/`,
     withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,17 +65,17 @@ export async function loginAdmin(payload: { username: string; password: string }
 }
 
 export async function logoutAdmin(): Promise<{ ok: boolean }> {
-  const response = await fetch(`${apiBase}/api/v1/admin/auth/logout`, withAuth({ method: 'POST' }));
+  const response = await fetch(`${apiBase}/api/v1/admin/auth/logout/`, withAuth({ method: 'POST' }));
   return handleResponse<{ ok: boolean }>(response);
 }
 
 export async function fetchAdminMe(): Promise<AdminMeResponse> {
-  const response = await fetch(`${apiBase}/api/v1/admin/auth/me`, withAuth());
+  const response = await fetch(`${apiBase}/api/v1/admin/auth/me/`, withAuth());
   return handleResponse<AdminMeResponse>(response);
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${apiBase}/api/v1/health`, withAuth());
+  const response = await fetch(`${apiBase}/api/v1/health/`, withAuth());
   return handleResponse<{ status: string }>(response);
 }
 
@@ -101,7 +101,7 @@ export async function updateAdminKey(
   payload: { name?: string; rate_limit_per_day?: number | null; rotate?: boolean }
 ): Promise<AdminApiKey> {
   const response = await fetch(
-    `${apiBase}/api/v1/admin/keys/${keyId}`,
+    `${apiBase}/api/v1/admin/keys/${keyId}/`,
     withAuth({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -112,14 +112,14 @@ export async function updateAdminKey(
 }
 
 export async function revokeAdminKey(keyId: string): Promise<AdminApiKey> {
-  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/revoke`, withAuth({ method: 'POST' }));
+  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/revoke/`, withAuth({ method: 'POST' }));
   return handleResponse<AdminApiKey>(response);
 }
 
 export async function fetchAdminKeyScans(keyId: string, limit: number, offset: number): Promise<AdminKeyScansResponse> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   const response = await fetch(
-    `${apiBase}/api/v1/admin/keys/${keyId}/scans?${params.toString()}`,
+    `${apiBase}/api/v1/admin/keys/${keyId}/scans/?${params.toString()}`,
     withAuth()
   );
   return handleResponse<AdminKeyScansResponse>(response);
@@ -151,7 +151,7 @@ export async function updateAdminUser(
   payload: { username?: string; password?: string; is_superadmin?: boolean; is_active?: boolean }
 ): Promise<AdminUser> {
   const response = await fetch(
-    `${apiBase}/api/v1/admin/users/${userId}`,
+    `${apiBase}/api/v1/admin/users/${userId}/`,
     withAuth({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -162,11 +162,11 @@ export async function updateAdminUser(
 }
 
 export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
-  const response = await fetch(`${apiBase}/api/v1/admin/users/${userId}`, withAuth({ method: 'DELETE' }));
+  const response = await fetch(`${apiBase}/api/v1/admin/users/${userId}/`, withAuth({ method: 'DELETE' }));
   return handleResponse<{ ok: boolean }>(response);
 }
 
 export async function fetchAdminProfile(): Promise<AdminUser> {
-  const response = await fetch(`${apiBase}/api/v1/admin/users/me`, withAuth());
+  const response = await fetch(`${apiBase}/api/v1/admin/users/me/`, withAuth());
   return handleResponse<AdminUser>(response);
 }

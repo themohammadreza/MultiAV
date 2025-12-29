@@ -4,6 +4,7 @@ const apiProxyTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_A
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  trailingSlash: true,
   experimental: {
     typedRoutes: true
   },
