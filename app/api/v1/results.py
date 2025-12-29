@@ -13,7 +13,7 @@ from app.services.aggregator.summary import summarize_job
 router = APIRouter()
 
 NOT_FOUND_MESSAGE = (
-    "Job not found. Make sure you scanned a file via /api/v1/scan and copied the full job_id."
+    "Job not found. Make sure you scanned a file via /api/v1/scan/ and copied the full job_id."
 )
 
 @router.get(

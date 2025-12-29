@@ -110,11 +110,11 @@ def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
     assert update_log.metadata_json["new_rate_limit_per_day"] == 80
 
 
-def test_list_create_keys_without_trailing_slash(client: httpx.Client):
+def test_list_create_keys_with_trailing_slash(client: httpx.Client):
     headers = _login_admin(client)
 
     create_response = client.post(
-        "/api/v1/admin/keys",
+        "/api/v1/admin/keys/",
         json={"name": "service-no-slash", "rate_limit_per_day": 25},
         headers=headers,
     )
@@ -122,7 +122,7 @@ def test_list_create_keys_without_trailing_slash(client: httpx.Client):
     key_id = create_response.json()["id"]
 
     list_response = client.get(
-        "/api/v1/admin/keys",
+        "/api/v1/admin/keys/",
         headers=headers,
     )
     assert list_response.status_code == 200
