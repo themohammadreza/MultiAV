@@ -140,13 +140,16 @@ def get_admin_session(
         raise HTTPException(status_code=401, detail="Missing admin session")
 
     if _bypass_enabled():
-        admin = db.query(AdminUser).order_by(AdminUser.created_at.asc()).first()
+        admin = (
+            db.query(AdminUser)
+            .filter(AdminUser.is_active.is_(True))
+            .order_by(AdminUser.created_at.asc())
+            .first()
+        )
         if not admin:
             admin = ensure_default_admin(db)
         if not admin:
             raise HTTPException(status_code=401, detail="Missing admin session")
-        if not admin.is_active:
-            raise HTTPException(status_code=401, detail="Inactive admin account")
         return AdminSession(
             user_id=admin.id,
             username=admin.username,
