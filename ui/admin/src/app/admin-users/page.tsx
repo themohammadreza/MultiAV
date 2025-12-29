@@ -3,6 +3,7 @@
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Card,
   Group,
@@ -13,7 +14,8 @@ import {
   Table,
   Text,
   TextInput,
-  Title
+  Title,
+  Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -219,8 +221,17 @@ export default function AdminUsersPage() {
               }}
               disabled={createDisabled}
             >
-              Create
-            </Button>
+              <span style={{ display: 'inline-block' }} data-disabled={isCreateDisabled || undefined}>
+                <Button
+                  onClick={() => {
+                    createMutation.mutate();
+                  }}
+                  disabled={isCreateDisabled}
+                >
+                  Create
+                </Button>
+              </span>
+            </Tooltip>
           </Group>
         </Stack>
       </Modal>
