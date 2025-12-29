@@ -37,6 +37,7 @@ export interface AdminUser {
   id: string;
   username: string;
   is_superadmin: boolean;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   last_login_at?: string | null;

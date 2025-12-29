@@ -31,6 +31,10 @@ def run_migrations(engine: Engine) -> None:
 
     if "admin_users" not in table_names:
         _create_admin_users_table(engine)
+    else:
+        admin_user_columns = {col["name"] for col in inspector.get_columns("admin_users")}
+        if "is_active" not in admin_user_columns:
+            _add_admin_users_is_active(engine)
 
     if "api_key_audit_logs" not in table_names:
         _create_api_key_audit_logs_table(engine)
@@ -130,6 +134,7 @@ def _create_admin_users_table(engine: Engine) -> None:
                     "username TEXT NOT NULL UNIQUE, "
                     "password_hash TEXT NOT NULL, "
                     "is_superadmin BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
                     "created_at TIMESTAMP, "
                     "updated_at TIMESTAMP, "
                     "last_login_at TIMESTAMP"
@@ -146,12 +151,28 @@ def _create_admin_users_table(engine: Engine) -> None:
                 "username TEXT NOT NULL UNIQUE, "
                 "password_hash TEXT NOT NULL, "
                 "is_superadmin BOOLEAN NOT NULL DEFAULT 0, "
+                "is_active BOOLEAN NOT NULL DEFAULT 1, "
                 "created_at TIMESTAMP, "
                 "updated_at TIMESTAMP, "
                 "last_login_at TIMESTAMP"
                 ")"
             )
         )
+
+
+def _add_admin_users_is_active(engine: Engine) -> None:
+    """Add is_active column to admin_users and backfill."""
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE")
+            )
+            conn.execute(text("UPDATE admin_users SET is_active = TRUE WHERE is_active IS NULL"))
+            return
+
+        conn.execute(text("ALTER TABLE admin_users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+        conn.execute(text("UPDATE admin_users SET is_active = 1 WHERE is_active IS NULL"))
 
 
 def _create_api_key_audit_logs_table(engine: Engine) -> None:
