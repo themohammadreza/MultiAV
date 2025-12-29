@@ -70,26 +70,26 @@ export async function submitScan(file: File): Promise<ScanResponse> {
 }
 
 export async function fetchJobResult(jobId: string): Promise<ResultSummary> {
-  const response = await fetch(`${apiBase}/api/v1/results/${jobId}`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/results/${jobId}/`, { headers: authHeaders() });
   return handleResponse<ResultSummary>(response);
 }
 
 export async function fetchRecentJobs(): Promise<RecentJobsResponse> {
-  const response = await fetch(`${apiBase}/api/v1/ui/jobs/recent`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/ui/jobs/recent/`, { headers: authHeaders() });
   return handleResponse<RecentJobsResponse>(response);
 }
 
 export async function fetchActiveEngines(): Promise<ActiveEnginesResponse> {
-  const response = await fetch(`${apiBase}/api/v1/ui/engines/active`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/ui/engines/active/`, { headers: authHeaders() });
   return handleResponse<ActiveEnginesResponse>(response);
 }
 
 export async function fetchApiKeyStatus(): Promise<ApiKeyStatusResponse> {
-  const response = await fetch(`${apiBase}/api/v1/ui/api-key`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/ui/api-key/`, { headers: authHeaders() });
   return handleResponse<ApiKeyStatusResponse>(response);
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${apiBase}/api/v1/health`, { headers: authHeaders() });
+  const response = await fetch(`${apiBase}/api/v1/health/`, { headers: authHeaders() });
   return handleResponse<{ status: string }>(response);
 }

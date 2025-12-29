@@ -50,7 +50,7 @@ def test_upload_scan_retrieve_flow(monkeypatch, client: httpx.Client, api_key_he
 
     result = None
     for _ in range(60):
-        result_response = client.get(f"/api/v1/results/{job_id}", headers=api_key_header)
+        result_response = client.get(f"/api/v1/results/{job_id}/", headers=api_key_header)
         assert result_response.status_code == 200
         result = result_response.json()
         if result["status"] in {"done", "done_with_errors", "error"}:
@@ -190,7 +190,7 @@ def test_duplicate_does_not_cache_terminal_errors(
 
 @pytest.mark.integration
 def test_get_results_401_without_api_key(client):
-    response = client.get("/api/v1/results/00000000-0000-0000-0000-000000000001")
+    response = client.get("/api/v1/results/00000000-0000-0000-0000-000000000001/")
 
     assert response.status_code == 401
 
@@ -198,7 +198,7 @@ def test_get_results_401_without_api_key(client):
 @pytest.mark.integration
 def test_get_results_404_for_unknown_job(client, api_key_header):
     response = client.get(
-        "/api/v1/results/00000000-0000-0000-0000-000000000001",
+        "/api/v1/results/00000000-0000-0000-0000-000000000001/",
         headers=api_key_header,
     )
 

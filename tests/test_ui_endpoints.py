@@ -43,7 +43,7 @@ def seed_job(status: str = "done", api_key_id=None, sha256: str = "abc123", file
 def test_recent_jobs_returns_summary(client: httpx.Client):
     raw_key, api_key = _create_api_key()
     job_id = seed_job(api_key_id=api_key.id)
-    response = client.get("/api/v1/ui/jobs/recent", headers={"X-API-Key": raw_key})
+    response = client.get("/api/v1/ui/jobs/recent/", headers={"X-API-Key": raw_key})
     assert response.status_code == 200
     payload = response.json()
     assert payload["count"] == 1
@@ -65,7 +65,7 @@ def test_recent_jobs_filters_by_severity_and_job(client: httpx.Client):
 
     # Partial job id filter should work without UUID casting errors
     response = client.get(
-        f"/api/v1/ui/jobs/recent?severity=high&job_id={job_id[:4]}",
+        f"/api/v1/ui/jobs/recent/?severity=high&job_id={job_id[:4]}",
         headers={"X-API-Key": raw_key},
     )
     assert response.status_code == 200
@@ -75,7 +75,7 @@ def test_recent_jobs_filters_by_severity_and_job(client: httpx.Client):
 
 
 def test_recent_jobs_requires_api_key(client: httpx.Client):
-    response = client.get("/api/v1/ui/jobs/recent")
+    response = client.get("/api/v1/ui/jobs/recent/")
     assert response.status_code == 401
 
 
@@ -86,7 +86,7 @@ def test_recent_jobs_scoped_to_api_key(client: httpx.Client):
     job_one = seed_job(api_key_id=api_key_1.id, sha256="abc123")
     seed_job(api_key_id=api_key_2.id, sha256="def456")
 
-    response = client.get("/api/v1/ui/jobs/recent", headers={"X-API-Key": raw_key_1})
+    response = client.get("/api/v1/ui/jobs/recent/", headers={"X-API-Key": raw_key_1})
     assert response.status_code == 200
     payload = response.json()
     assert payload["count"] == 1
@@ -99,13 +99,13 @@ def test_active_engines_uses_registry(monkeypatch, client: httpx.Client):
         {"stub": {"runner": AVAILABLE_ENGINES["clamav"], "timeout": 7, "weight": 2.0}},
     )
 
-    response = client.get("/api/v1/ui/engines/active")
+    response = client.get("/api/v1/ui/engines/active/")
     assert response.status_code == 200
     engines = response.json()["engines"]
     assert any(e["engine"] == "stub" and e["timeout"] == 7 and e["weight"] == 2.0 for e in engines)
 
 
 def test_health_endpoint(client: httpx.Client):
-    response = client.get("/api/v1/health")
+    response = client.get("/api/v1/health/")
     assert response.status_code == 200
     assert response.json().get("status") == "ok"
