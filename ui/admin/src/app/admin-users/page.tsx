@@ -196,49 +196,6 @@ export default function AdminUsersPage() {
       </Group>
 
       <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
-<<<<<<< HEAD
-        <Stack component="form">
-          <TextInput
-            label="Username"
-            name="username"
-            autoComplete="new-username"
-            placeholder="admin"
-            value={createUsername}
-            onChange={(event) => setCreateUsername(event.currentTarget.value)}
-          />
-          <PasswordInput
-            label="Password"
-            name="password"
-            autoComplete="new-password"
-            placeholder="Your Password"
-            value={createPassword}
-            onChange={(event) => setCreatePassword(event.currentTarget.value)}
-          />
-          <Switch
-            label="Grant superadmin access"
-            checked={createSuperadmin}
-            onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
-          />
-          {createDisabled && (
-            <Text size="xs" c="dimmed">
-              Enter both username and password to enable Create.
-            </Text>
-          )}
-          <Group justify="flex-end">
-            <Button variant="default" onClick={createModal.close}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                createMutation.mutate();
-              }}
-              disabled={createDisabled}
-            >
-              Create
-            </Button>
-          </Group>
-        </Stack>
-=======
         <form autoComplete="off">
           <Stack>
             <TextInput
@@ -283,7 +240,6 @@ export default function AdminUsersPage() {
             </Group>
           </Stack>
         </form>
->>>>>>> a80887a66061a6754f487a92e85f540ba0bbe362
       </Modal>
 
       <Modal opened={editOpened} onClose={editModal.close} title="Update admin user" centered>
