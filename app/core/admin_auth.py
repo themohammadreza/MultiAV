@@ -110,11 +110,15 @@ def validate_admin_credentials(db: Session, username: str, password: str) -> Adm
     if _bypass_enabled():
         admin = db.query(AdminUser).filter(AdminUser.username == username).first()
         if admin:
+            if not admin.is_active:
+                raise HTTPException(status_code=401, detail="Inactive admin account")
             return admin
 
     admin = db.query(AdminUser).filter(AdminUser.username == username).first()
     if not admin or not verify_password(password, admin.password_hash):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    if not admin.is_active:
+        raise HTTPException(status_code=401, detail="Inactive admin account")
     return admin
 
 
@@ -141,6 +145,8 @@ def get_admin_session(
             admin = ensure_default_admin(db)
         if not admin:
             raise HTTPException(status_code=401, detail="Missing admin session")
+        if not admin.is_active:
+            raise HTTPException(status_code=401, detail="Inactive admin account")
         return AdminSession(
             user_id=admin.id,
             username=admin.username,
@@ -152,6 +158,8 @@ def get_admin_session(
     admin = db.query(AdminUser).filter(AdminUser.id == user_id).first()
     if not admin:
         raise HTTPException(status_code=401, detail="Invalid admin session")
+    if not admin.is_active:
+        raise HTTPException(status_code=401, detail="Inactive admin account")
     return AdminSession(
         user_id=admin.id,
         username=admin.username,

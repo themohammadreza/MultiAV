@@ -49,6 +49,7 @@ export default function AdminUsersPage() {
   const [editUsername, setEditUsername] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editSuperadmin, setEditSuperadmin] = useState(false);
+  const [editActive, setEditActive] = useState(true);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
 
@@ -70,6 +71,10 @@ export default function AdminUsersPage() {
   const users = usersQuery.data ?? [];
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.username.localeCompare(b.username)),
+    [users]
+  );
+  const activeSuperadminCount = useMemo(
+    () => users.filter((user) => user.is_superadmin && user.is_active).length,
     [users]
   );
 
@@ -98,11 +103,18 @@ export default function AdminUsersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { userId: string; username?: string; password?: string; is_superadmin?: boolean }) =>
+    mutationFn: (payload: {
+      userId: string;
+      username?: string;
+      password?: string;
+      is_superadmin?: boolean;
+      is_active?: boolean;
+    }) =>
       updateAdminUser(payload.userId, {
         username: payload.username,
         password: payload.password,
-        is_superadmin: payload.is_superadmin
+        is_superadmin: payload.is_superadmin,
+        is_active: payload.is_active
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
@@ -247,6 +259,14 @@ export default function AdminUsersPage() {
             checked={editSuperadmin}
             onChange={(event) => setEditSuperadmin(event.currentTarget.checked)}
           />
+          <Switch
+            label="Active"
+            checked={editActive}
+            disabled={Boolean(
+              editingUser?.is_superadmin && editingUser.is_active && activeSuperadminCount <= 1
+            )}
+            onChange={(event) => setEditActive(event.currentTarget.checked)}
+          />
           <Group justify="flex-end">
             <Button variant="default" onClick={editModal.close}>
               Cancel
@@ -255,9 +275,13 @@ export default function AdminUsersPage() {
               onClick={() => {
                 if (!editingUser) return;
                 const trimmedUsername = editUsername.trim();
-                const payload: { userId: string; username?: string; password?: string; is_superadmin?: boolean } = {
-                  userId: editingUser.id
-                };
+                const payload: {
+                  userId: string;
+                  username?: string;
+                  password?: string;
+                  is_superadmin?: boolean;
+                  is_active?: boolean;
+                } = { userId: editingUser.id };
                 if (trimmedUsername && trimmedUsername !== editingUser.username) {
                   payload.username = trimmedUsername;
                 }
@@ -267,7 +291,15 @@ export default function AdminUsersPage() {
                 if (editSuperadmin !== editingUser.is_superadmin) {
                   payload.is_superadmin = editSuperadmin;
                 }
-                if (!payload.username && !payload.password && payload.is_superadmin === undefined) {
+                if (editActive !== editingUser.is_active) {
+                  payload.is_active = editActive;
+                }
+                if (
+                  !payload.username &&
+                  !payload.password &&
+                  payload.is_superadmin === undefined &&
+                  payload.is_active === undefined
+                ) {
                   notifications.show({
                     title: 'No changes',
                     message: 'Update at least one field before saving.',
@@ -312,6 +344,7 @@ export default function AdminUsersPage() {
             <Table.Tr>
               <Table.Th>Username</Table.Th>
               <Table.Th>Role</Table.Th>
+              <Table.Th>Status</Table.Th>
               <Table.Th>Last login</Table.Th>
               <Table.Th>Updated</Table.Th>
               <Table.Th />
@@ -328,6 +361,30 @@ export default function AdminUsersPage() {
                     {user.is_superadmin ? 'Superadmin' : 'Admin'}
                   </Badge>
                 </Table.Td>
+                <Table.Td>
+                  <Group gap="xs">
+                    <Badge color={user.is_active ? 'green' : 'red'} variant="light">
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <Tooltip
+                      label="At least one active superadmin is required."
+                      disabled={!(user.is_superadmin && user.is_active && activeSuperadminCount <= 1)}
+                    >
+                      <Switch
+                        size="sm"
+                        checked={user.is_active}
+                        disabled={user.is_superadmin && user.is_active && activeSuperadminCount <= 1}
+                        onChange={(event) => {
+                          updateMutation.mutate({
+                            userId: user.id,
+                            is_active: event.currentTarget.checked
+                          });
+                        }}
+                        aria-label={user.is_active ? 'Deactivate admin' : 'Activate admin'}
+                      />
+                    </Tooltip>
+                  </Group>
+                </Table.Td>
                 <Table.Td>{formatDate(user.last_login_at)}</Table.Td>
                 <Table.Td>{formatDate(user.updated_at)}</Table.Td>
                 <Table.Td>
@@ -340,6 +397,7 @@ export default function AdminUsersPage() {
                         setEditUsername(user.username);
                         setEditPassword('');
                         setEditSuperadmin(user.is_superadmin);
+                        setEditActive(user.is_active);
                         editModal.open();
                       }}
                     >

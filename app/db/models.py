@@ -114,6 +114,7 @@ class AdminUser(Base):
     username = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     is_superadmin = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),

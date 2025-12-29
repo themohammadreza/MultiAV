@@ -42,16 +42,32 @@ def test_superadmin_can_manage_admin_users(client: httpx.Client):
     response = client.patch(
         f"/api/v1/admin/users/{user_id}",
         headers=headers,
-        json={"is_superadmin": True},
+        json={"is_superadmin": True, "is_active": False},
     )
     assert response.status_code == 200
     assert response.json()["is_superadmin"] is True
+    assert response.json()["is_active"] is False
 
     response = client.delete(
         f"/api/v1/admin/users/{user_id}",
         headers=headers,
     )
     assert response.status_code == 200
+
+
+def test_superadmin_cannot_deactivate_last_active_superadmin(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+
+    response = client.get("/api/v1/admin/users/", headers=headers)
+    assert response.status_code == 200
+    superadmin = response.json()[0]
+
+    response = client.patch(
+        f"/api/v1/admin/users/{superadmin['id']}",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert response.status_code == 400
 
 
 def test_non_superadmin_permissions_are_limited(client: httpx.Client):
