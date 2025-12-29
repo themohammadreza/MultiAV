@@ -17,7 +17,7 @@ NOT_FOUND_MESSAGE = (
 )
 
 @router.get(
-    "/{job_id}",
+    "/{job_id}/",
     responses={
         404: {
             "description": NOT_FOUND_MESSAGE,

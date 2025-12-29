@@ -168,7 +168,7 @@ def create_key(
     )
 
 
-@router.patch("/{key_id}", response_model=ApiKeyResponse)
+@router.patch("/{key_id}/", response_model=ApiKeyResponse)
 def update_key(
     key_id: str,
     payload: ApiKeyUpdateRequest,
@@ -234,7 +234,7 @@ def update_key(
     )
 
 
-@router.post("/{key_id}/revoke", response_model=ApiKeyResponse)
+@router.post("/{key_id}/revoke/", response_model=ApiKeyResponse)
 def revoke_key(
     key_id: str,
     admin: AdminSession = Depends(get_admin_session),
@@ -265,7 +265,7 @@ def revoke_key(
     )
 
 
-@router.get("/{key_id}/scans", response_model=ApiKeyScansResponse)
+@router.get("/{key_id}/scans/", response_model=ApiKeyScansResponse)
 def list_key_scans(
     key_id: str,
     _: AdminSession = Depends(get_admin_session),
