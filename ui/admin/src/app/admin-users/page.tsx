@@ -13,7 +13,8 @@ import {
   Table,
   Text,
   TextInput,
-  Title
+  Title,
+  Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -48,6 +49,8 @@ export default function AdminUsersPage() {
   const [editSuperadmin, setEditSuperadmin] = useState(false);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  const isCreateDisabled = !createUsername.trim() || !createPassword;
 
   const adminMe = useQuery({
     queryKey: ['admin-me'],
@@ -182,15 +185,15 @@ export default function AdminUsersPage() {
         <Stack component="form" autoComplete="off">
           <TextInput
             label="Username"
-				name="username"
-				autoComplete="new-username"
+            name="username"
+            autoComplete="new-username"
             value={createUsername}
             onChange={(event) => setCreateUsername(event.currentTarget.value)}
           />
           <PasswordInput
             label=" password"
-				name="password"
-				autoComplete="new-password"
+            name="password"
+            autoComplete="new-password"
             value={createPassword}
             onChange={(event) => setCreatePassword(event.currentTarget.value)}
           />
@@ -203,14 +206,22 @@ export default function AdminUsersPage() {
             <Button variant="default" onClick={createModal.close}>
               Cancel
             </Button>
-            <Button
-              onClick={() => {
-                createMutation.mutate();
-              }}
-              disabled={!createUsername.trim() || !createPassword}
+            <Tooltip
+              label="Enter both username and password to enable Create."
+              disabled={!isCreateDisabled}
+              withinPortal
             >
-              Create
-            </Button>
+              <span style={{ display: 'inline-block' }} data-disabled={isCreateDisabled || undefined}>
+                <Button
+                  onClick={() => {
+                    createMutation.mutate();
+                  }}
+                  disabled={isCreateDisabled}
+                >
+                  Create
+                </Button>
+              </span>
+            </Tooltip>
           </Group>
         </Stack>
       </Modal>
