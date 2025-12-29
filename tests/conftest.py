@@ -105,10 +105,13 @@ def celery_worker_instance():
 
 @pytest.fixture(autouse=True)
 def clean_database():
-    from app.db.session import Base, engine
+    from app.core.admin_seed import ensure_default_admin
+    from app.db.session import Base, SessionLocal, engine
 
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        ensure_default_admin(db)
     yield
     Base.metadata.drop_all(bind=engine)
 

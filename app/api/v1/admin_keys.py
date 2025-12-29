@@ -148,6 +148,7 @@ def create_key(
         is_active=True,
     )
     db.add(api_key)
+    db.flush()
     _log_audit_entry(
         db,
         api_key_id=api_key.id,
