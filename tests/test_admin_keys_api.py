@@ -10,7 +10,7 @@ from app.db.session import SessionLocal
 
 def _login_admin(client: httpx.Client) -> dict[str, str]:
     response = client.post(
-        "/api/v1/admin/auth/login",
+        "/api/v1/admin/auth/login/",
         json={"username": "admin", "password": "admin"},
     )
     assert response.status_code == 200
@@ -40,7 +40,7 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert any(item["id"] == key_id for item in keys)
 
     rotate_response = client.patch(
-        f"/api/v1/admin/keys/{key_id}",
+        f"/api/v1/admin/keys/{key_id}/",
         json={"rotate": True, "name": "service-a-rotated"},
         headers=headers,
     )
@@ -50,7 +50,7 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert rotate_payload["name"] == "service-a-rotated"
 
     revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke",
+        f"/api/v1/admin/keys/{key_id}/revoke/",
         headers=headers,
     )
     assert revoke_response.status_code == 200
@@ -70,21 +70,21 @@ def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
     key_id = create_response.json()["id"]
 
     update_response = client.patch(
-        f"/api/v1/admin/keys/{key_id}",
+        f"/api/v1/admin/keys/{key_id}/",
         json={"name": "audit-service-updated", "rate_limit_per_day": 80},
         headers=headers,
     )
     assert update_response.status_code == 200
 
     rotate_response = client.patch(
-        f"/api/v1/admin/keys/{key_id}",
+        f"/api/v1/admin/keys/{key_id}/",
         json={"rotate": True},
         headers=headers,
     )
     assert rotate_response.status_code == 200
 
     revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke",
+        f"/api/v1/admin/keys/{key_id}/revoke/",
         headers=headers,
     )
     assert revoke_response.status_code == 200
@@ -156,7 +156,7 @@ def test_list_key_scans(client: httpx.Client):
         db.close()
 
     response = client.get(
-        f"/api/v1/admin/keys/{api_key_id}/scans",
+        f"/api/v1/admin/keys/{api_key_id}/scans/",
         headers=headers,
     )
     assert response.status_code == 200
@@ -170,20 +170,20 @@ def test_admin_key_invalid_uuid_returns_404(client: httpx.Client):
     headers = _login_admin(client)
 
     update_response = client.patch(
-        "/api/v1/admin/keys/not-a-uuid",
+        "/api/v1/admin/keys/not-a-uuid/",
         json={"name": "nope"},
         headers=headers,
     )
     assert update_response.status_code == 404
 
     revoke_response = client.post(
-        "/api/v1/admin/keys/not-a-uuid/revoke",
+        "/api/v1/admin/keys/not-a-uuid/revoke/",
         headers=headers,
     )
     assert revoke_response.status_code == 404
 
     scans_response = client.get(
-        "/api/v1/admin/keys/not-a-uuid/scans",
+        "/api/v1/admin/keys/not-a-uuid/scans/",
         headers=headers,
     )
     assert scans_response.status_code == 404
@@ -203,13 +203,13 @@ def test_revoked_key_rejected_for_ui_requests(client: httpx.Client):
     raw_key = payload["raw_key"]
 
     revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke",
+        f"/api/v1/admin/keys/{key_id}/revoke/",
         headers=headers,
     )
     assert revoke_response.status_code == 200
 
     response = client.get(
-        "/api/v1/ui/jobs/recent",
+        "/api/v1/ui/jobs/recent/",
         headers={"X-API-Key": raw_key},
     )
     assert response.status_code == 401

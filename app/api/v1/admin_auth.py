@@ -38,7 +38,7 @@ class AdminMeResponse(BaseModel):
     expires_at: datetime | None = None
 
 
-@router.post("/login", response_model=AdminLoginResponse)
+@router.post("/login/", response_model=AdminLoginResponse)
 def admin_login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)):
     admin = validate_admin_credentials(db, payload.username, payload.password)
     token, expires_at = create_admin_token(admin)
@@ -56,13 +56,13 @@ def admin_login(payload: AdminLoginRequest, response: Response, db: Session = De
     return AdminLoginResponse(token=token, expires_at=expires_at)
 
 
-@router.post("/logout")
+@router.post("/logout/")
 def admin_logout(response: Response):
     response.delete_cookie(ADMIN_AUTH_COOKIE_NAME)
     return {"ok": True}
 
 
-@router.get("/me", response_model=AdminMeResponse)
+@router.get("/me/", response_model=AdminMeResponse)
 def admin_me(session: AdminSession = Depends(get_admin_session)):
     return AdminMeResponse(
         id=str(session.user_id),

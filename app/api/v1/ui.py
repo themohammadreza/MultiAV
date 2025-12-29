@@ -20,7 +20,7 @@ router = APIRouter()
 API_KEY_TTL_DAYS = int(os.getenv("API_KEY_TTL_DAYS", "30"))
 
 
-@router.get("/api-key")
+@router.get("/api-key/")
 def get_api_key_status(
     api_key: APIKeyModel | None = Depends(get_current_api_key),
 ):
@@ -50,7 +50,7 @@ def get_api_key_status(
     }
 
 
-@router.get("/jobs/recent")
+@router.get("/jobs/recent/")
 def list_recent_jobs(
     *,
     api_key: APIKeyModel | None = Depends(get_current_api_key),
@@ -119,7 +119,7 @@ def list_recent_jobs(
     return {"items": items, "count": len(items)}
 
 
-@router.get("/engines/active")
+@router.get("/engines/active/")
 def get_engines():
     engine_registry = registry.get_active_engines()
     engines = [
