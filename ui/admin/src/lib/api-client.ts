@@ -75,7 +75,7 @@ export async function fetchAdminMe(): Promise<AdminMeResponse> {
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${apiBase}/api/v1/health`, withAuth());
+  const response = await fetch(`${apiBase}/api/v1/health/`, withAuth());
   return handleResponse<{ status: string }>(response);
 }
 

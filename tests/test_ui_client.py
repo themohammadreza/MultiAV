@@ -28,7 +28,7 @@ def test_upload_and_poll_flow():
             assert request.headers.get("X-API-Key") == "test-key"
             return httpx.Response(200, json={"job_id": "abc", "status": "queued", "cached": False})
 
-        if request.url.path == "/api/v1/results/abc":
+        if request.url.path == "/api/v1/results/abc/":
             assert request.headers.get("X-API-Key") == "test-key"
             calls["results"] += 1
             if calls["results"] < 2:
@@ -50,12 +50,12 @@ def test_upload_and_poll_flow():
 
 def test_list_recent_jobs_and_engines():
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/ui/jobs/recent":
+        if request.url.path == "/api/v1/ui/jobs/recent/":
             assert request.headers.get("X-API-Key") == "test-key"
             assert request.url.params.get("severity") == "high"
             assert request.url.params.get("job_id") == "abc"
             return httpx.Response(200, json={"items": [{"job_id": "1", "filename": "foo.bin"}]})
-        if request.url.path == "/api/v1/ui/engines/active":
+        if request.url.path == "/api/v1/ui/engines/active/":
             assert request.headers.get("X-API-Key") == "test-key"
             return httpx.Response(200, json={"engines": [{"engine": "stub", "timeout": 10, "weight": 1.0}]})
         return httpx.Response(404)
@@ -71,7 +71,7 @@ def test_list_recent_jobs_and_engines():
 
 def test_list_recent_jobs_scoped_per_api_key():
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/ui/jobs/recent":
+        if request.url.path == "/api/v1/ui/jobs/recent/":
             api_key = request.headers.get("X-API-Key")
             if api_key == "key-a":
                 return httpx.Response(200, json={"items": [{"job_id": "a1", "filename": "alpha.bin"}]})

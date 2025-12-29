@@ -56,7 +56,7 @@ class MultiAVClient:
         return payload
 
     def get_results(self, job_id: str) -> Dict[str, Any]:
-        response = self._client.get(f"/api/v1/results/{job_id}")
+        response = self._client.get(f"/api/v1/results/{job_id}/")
         response.raise_for_status()
         return response.json()
 
@@ -90,13 +90,13 @@ class MultiAVClient:
             params["severity"] = severity
         if job_id:
             params["job_id"] = job_id
-        response = self._client.get("/api/v1/ui/jobs/recent", params=params)
+        response = self._client.get("/api/v1/ui/jobs/recent/", params=params)
         response.raise_for_status()
         payload = response.json()
         return payload.get("items", [])
 
     def get_engines(self) -> List[Dict[str, Any]]:
-        response = self._client.get("/api/v1/ui/engines/active")
+        response = self._client.get("/api/v1/ui/engines/active/")
         response.raise_for_status()
         payload = response.json()
         engines = payload.get("engines")

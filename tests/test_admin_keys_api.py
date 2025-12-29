@@ -209,7 +209,7 @@ def test_revoked_key_rejected_for_ui_requests(client: httpx.Client):
     assert revoke_response.status_code == 200
 
     response = client.get(
-        "/api/v1/ui/jobs/recent",
+        "/api/v1/ui/jobs/recent/",
         headers={"X-API-Key": raw_key},
     )
     assert response.status_code == 401
