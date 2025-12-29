@@ -37,7 +37,7 @@ export function AdminLoginForm() {
     <Group justify="center" mt="xl">
       <Card withBorder padding="lg" radius="md" w="100%" maw={420}>
         <Stack>
-          <Title order={3}>Admin sign in</Title>
+          <Title order={3}>Admin Sign In</Title>
           <Text size="sm" c="dimmed">
             Use your admin credentials to manage API keys.
           </Text>
