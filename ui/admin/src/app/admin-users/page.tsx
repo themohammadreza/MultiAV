@@ -179,14 +179,18 @@ export default function AdminUsersPage() {
       </Group>
 
       <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
-        <Stack>
+        <Stack component="form" autoComplete="off">
           <TextInput
             label="Username"
+				name="username"
+				autoComplete="new-username"
             value={createUsername}
             onChange={(event) => setCreateUsername(event.currentTarget.value)}
           />
           <PasswordInput
             label=" password"
+				name="password"
+				autoComplete="new-password"
             value={createPassword}
             onChange={(event) => setCreatePassword(event.currentTarget.value)}
           />

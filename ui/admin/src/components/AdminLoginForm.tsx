@@ -44,12 +44,16 @@ export function AdminLoginForm() {
           <TextInput
             label="Username"
             placeholder="admin"
+				name="username"
+				autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.currentTarget.value)}
           />
           <PasswordInput
             label="Password"
             placeholder="Your password"
+				name="password"
+				autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
           />
