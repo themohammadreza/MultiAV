@@ -221,17 +221,8 @@ export default function AdminUsersPage() {
               }}
               disabled={createDisabled}
             >
-              <span style={{ display: 'inline-block' }} data-disabled={isCreateDisabled || undefined}>
-                <Button
-                  onClick={() => {
-                    createMutation.mutate();
-                  }}
-                  disabled={isCreateDisabled}
-                >
-                  Create
-                </Button>
-              </span>
-            </Tooltip>
+              Create
+            </Button>
           </Group>
         </Stack>
       </Modal>
