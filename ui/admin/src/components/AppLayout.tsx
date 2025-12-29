@@ -24,7 +24,7 @@ import { clearAdminToken } from '@/lib/admin-auth';
 import { ApiError, fetchAdminMe, fetchHealth, logoutAdmin } from '@/lib/api-client';
 
 const links = [
-  { label: 'API Keys', href: '/' },
+  { label: 'Admin Keys', href: '/' },
   { label: 'Admin Users', href: '/admin-users', superadminOnly: true },
   { label: 'My Account', href: '/account' }
 ];

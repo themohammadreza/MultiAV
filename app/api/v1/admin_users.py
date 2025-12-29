@@ -74,7 +74,6 @@ def get_my_admin_profile(
     return _to_response(user)
 
 
-@router.get("", response_model=list[AdminUserResponse])
 @router.get("/", response_model=list[AdminUserResponse])
 def list_admin_users(
     session: AdminSession = Depends(get_admin_session),
@@ -85,7 +84,6 @@ def list_admin_users(
     return [_to_response(user) for user in users]
 
 
-@router.post("", response_model=AdminUserResponse)
 @router.post("/", response_model=AdminUserResponse)
 def create_admin_user(
     payload: AdminUserCreateRequest,

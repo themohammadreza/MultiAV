@@ -105,7 +105,6 @@ def _log_audit_entry(
     )
 
 
-@router.get("", response_model=list[ApiKeyResponse])
 @router.get("/", response_model=list[ApiKeyResponse])
 def list_keys(
     _: AdminSession = Depends(get_admin_session),
@@ -125,7 +124,6 @@ def list_keys(
     ]
 
 
-@router.post("", response_model=ApiKeyResponse)
 @router.post("/", response_model=ApiKeyResponse)
 def create_key(
     payload: ApiKeyCreateRequest,

@@ -137,7 +137,7 @@ export default function AdminKeysPage() {
 
   return (
     <Stack gap="lg">
-      <Title order={2}>Admin keys</Title>
+      <Title order={2}>Admin Keys</Title>
 
       <Modal opened={editModalOpened} onClose={editModal.close} title="Rename or update quota" centered>
         <Stack>

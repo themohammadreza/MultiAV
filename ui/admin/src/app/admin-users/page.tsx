@@ -137,7 +137,7 @@ export default function AdminUsersPage() {
   if (adminMe.isLoading) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Text size="sm" c="dimmed">
             Loading admin profile…
@@ -150,7 +150,7 @@ export default function AdminUsersPage() {
   if (adminMe.isError) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Text size="sm" c="red">
             Unable to confirm admin permissions.
@@ -163,7 +163,7 @@ export default function AdminUsersPage() {
   if (!isSuperadmin) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Stack gap="xs">
             <Text fw={600}>Superadmin access required</Text>
@@ -179,11 +179,12 @@ export default function AdminUsersPage() {
   return (
     <Stack gap="lg">
       <Group justify="space-between">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Button onClick={createModal.open}>Add admin</Button>
       </Group>
 
       <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
+<<<<<<< HEAD
         <Stack component="form">
           <TextInput
             label="Username"
@@ -225,6 +226,52 @@ export default function AdminUsersPage() {
             </Button>
           </Group>
         </Stack>
+=======
+        <form autoComplete="off">
+          <Stack>
+            <TextInput
+              label="Username"
+              name="username"
+              autoComplete="new-username"
+              placeholder="admin"
+              value={createUsername}
+              onChange={(event) => setCreateUsername(event.currentTarget.value)}
+            />
+            <PasswordInput
+              label="Password"
+              name="password"
+              autoComplete="new-password"
+              placeholder=" Your Password"
+              value={createPassword}
+              onChange={(event) => setCreatePassword(event.currentTarget.value)}
+            />
+            <Switch
+              label="Grant superadmin access"
+              checked={createSuperadmin}
+              onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
+            />
+            {createDisabled && (
+              <Text size="xs" c="dimmed">
+                Enter both username and password to enable Create.
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" type="button" onClick={createModal.close}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  createMutation.mutate();
+                }}
+                disabled={createDisabled}
+              >
+                Create
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+>>>>>>> a80887a66061a6754f487a92e85f540ba0bbe362
       </Modal>
 
       <Modal opened={editOpened} onClose={editModal.close} title="Update admin user" centered>
