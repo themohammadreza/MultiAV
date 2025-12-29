@@ -186,7 +186,7 @@ export default function AdminUsersPage() {
             onChange={(event) => setCreateUsername(event.currentTarget.value)}
           />
           <PasswordInput
-            label="Temporary password"
+            label=" password"
             value={createPassword}
             onChange={(event) => setCreatePassword(event.currentTarget.value)}
           />
