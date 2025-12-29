@@ -22,6 +22,7 @@ import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { AdminUser } from '@/lib/api-types';
 import { createAdminUser, deleteAdminUser, fetchAdminMe, listAdminUsers, updateAdminUser } from '@/lib/api-client';
+import { isCreateDisabled } from '@/lib/admin-users';
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
@@ -48,6 +49,8 @@ export default function AdminUsersPage() {
   const [editSuperadmin, setEditSuperadmin] = useState(false);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  const createDisabled = isCreateDisabled(createUsername, createPassword);
 
   const adminMe = useQuery({
     queryKey: ['admin-me'],
@@ -179,18 +182,20 @@ export default function AdminUsersPage() {
       </Group>
 
       <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
-        <Stack component="form" autoComplete="off">
+        <Stack component="form">
           <TextInput
             label="Username"
-				name="username"
-				autoComplete="new-username"
+            name="username"
+            autoComplete="new-username"
+            placeholder="admin"
             value={createUsername}
             onChange={(event) => setCreateUsername(event.currentTarget.value)}
           />
           <PasswordInput
-            label=" password"
-				name="password"
-				autoComplete="new-password"
+            label="Password"
+            name="password"
+            autoComplete="new-password"
+            placeholder="Your Password"
             value={createPassword}
             onChange={(event) => setCreatePassword(event.currentTarget.value)}
           />
@@ -199,6 +204,11 @@ export default function AdminUsersPage() {
             checked={createSuperadmin}
             onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
           />
+          {createDisabled && (
+            <Text size="xs" c="dimmed">
+              Enter both username and password to enable Create.
+            </Text>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={createModal.close}>
               Cancel
@@ -207,7 +217,7 @@ export default function AdminUsersPage() {
               onClick={() => {
                 createMutation.mutate();
               }}
-              disabled={!createUsername.trim() || !createPassword}
+              disabled={createDisabled}
             >
               Create
             </Button>
