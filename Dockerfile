@@ -33,6 +33,7 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --retries 5 --timeout 120 -r requirements.txt
+RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 psycopg2-binary==2.9.9
 
 # Copy configuration so defaults work even without a bind mount
 COPY config ./config
