@@ -137,7 +137,7 @@ export default function AdminUsersPage() {
   if (adminMe.isLoading) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Text size="sm" c="dimmed">
             Loading admin profile…
@@ -150,7 +150,7 @@ export default function AdminUsersPage() {
   if (adminMe.isError) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Text size="sm" c="red">
             Unable to confirm admin permissions.
@@ -163,7 +163,7 @@ export default function AdminUsersPage() {
   if (!isSuperadmin) {
     return (
       <Stack gap="lg">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Card withBorder>
           <Stack gap="xs">
             <Text fw={600}>Superadmin access required</Text>
@@ -179,7 +179,7 @@ export default function AdminUsersPage() {
   return (
     <Stack gap="lg">
       <Group justify="space-between">
-        <Title order={2}>Admin users</Title>
+        <Title order={2}>Admin Users</Title>
         <Button onClick={createModal.open}>Add admin</Button>
       </Group>
 
