@@ -14,7 +14,8 @@ import {
   Table,
   Text,
   TextInput,
-  Title
+  Title,
+  Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -49,6 +50,8 @@ export default function AdminUsersPage() {
   const [editSuperadmin, setEditSuperadmin] = useState(false);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  const isCreateDisabled = !createUsername.trim() || !createPassword;
 
   const adminMe = useQuery({
     queryKey: ['admin-me'],
