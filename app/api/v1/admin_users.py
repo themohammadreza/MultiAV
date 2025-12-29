@@ -86,7 +86,7 @@ def _ensure_active_superadmin_remains(db: Session, user: AdminUser, new_is_super
             raise HTTPException(status_code=400, detail="At least one superadmin must remain active")
 
 
-@router.get("/me", response_model=AdminUserResponse)
+@router.get("/me/", response_model=AdminUserResponse)
 def get_my_admin_profile(
     session: AdminSession = Depends(get_admin_session),
     db: Session = Depends(get_db),
@@ -127,7 +127,7 @@ def create_admin_user(
     return _to_response(user)
 
 
-@router.patch("/{user_id}", response_model=AdminUserResponse)
+@router.patch("/{user_id}/", response_model=AdminUserResponse)
 def update_admin_user(
     user_id: str,
     payload: AdminUserUpdateRequest,
@@ -170,7 +170,7 @@ def update_admin_user(
     return _to_response(user)
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}/")
 def delete_admin_user(
     user_id: str,
     session: AdminSession = Depends(get_admin_session),

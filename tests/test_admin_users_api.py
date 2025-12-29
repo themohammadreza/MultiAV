@@ -7,7 +7,7 @@ from app.db.session import SessionLocal
 
 def _login_admin(client: httpx.Client, username: str, password: str) -> dict[str, str]:
     response = client.post(
-        "/api/v1/admin/auth/login",
+        "/api/v1/admin/auth/login/",
         json={"username": username, "password": password},
     )
     assert response.status_code == 200
@@ -40,7 +40,7 @@ def test_superadmin_can_manage_admin_users(client: httpx.Client):
     user_id = response.json()["id"]
 
     response = client.patch(
-        f"/api/v1/admin/users/{user_id}",
+        f"/api/v1/admin/users/{user_id}/",
         headers=headers,
         json={"is_superadmin": True, "is_active": False},
     )
@@ -49,7 +49,7 @@ def test_superadmin_can_manage_admin_users(client: httpx.Client):
     assert response.json()["is_active"] is False
 
     response = client.delete(
-        f"/api/v1/admin/users/{user_id}",
+        f"/api/v1/admin/users/{user_id}/",
         headers=headers,
     )
     assert response.status_code == 200
@@ -63,7 +63,7 @@ def test_superadmin_cannot_deactivate_last_active_superadmin(client: httpx.Clien
     superadmin = response.json()[0]
 
     response = client.patch(
-        f"/api/v1/admin/users/{superadmin['id']}",
+        f"/api/v1/admin/users/{superadmin['id']}/",
         headers=headers,
         json={"is_active": False},
     )
@@ -77,12 +77,12 @@ def test_non_superadmin_permissions_are_limited(client: httpx.Client):
     response = client.get("/api/v1/admin/users/", headers=headers)
     assert response.status_code == 403
 
-    response = client.get("/api/v1/admin/users/me", headers=headers)
+    response = client.get("/api/v1/admin/users/me/", headers=headers)
     assert response.status_code == 200
     assert response.json()["id"] == str(regular_admin.id)
 
     response = client.patch(
-        f"/api/v1/admin/users/{regular_admin.id}",
+        f"/api/v1/admin/users/{regular_admin.id}/",
         headers=headers,
         json={"username": "new-name", "password": "new-pass"},
     )
