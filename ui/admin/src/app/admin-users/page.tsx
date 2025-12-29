@@ -184,56 +184,50 @@ export default function AdminUsersPage() {
       </Group>
 
       <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
-        <Stack component="form">
-          <TextInput
-            label="Username"
-            name="username"
-            autoComplete="new-username"
-            placeholder="admin"
-            value={createUsername}
-            onChange={(event) => setCreateUsername(event.currentTarget.value)}
-          />
-          <PasswordInput
-            label="Password"
-            name="password"
-            autoComplete="new-password"
-            placeholder="Your Password"
-            value={createPassword}
-            onChange={(event) => setCreatePassword(event.currentTarget.value)}
-          />
-          <Switch
-            label="Grant superadmin access"
-            checked={createSuperadmin}
-            onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
-          />
-          {createDisabled && (
-            <Text size="xs" c="dimmed">
-              Enter both username and password to enable Create.
-            </Text>
-          )}
-          <Group justify="flex-end">
-            <Button variant="default" onClick={createModal.close}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                createMutation.mutate();
-              }}
-              disabled={createDisabled}
-            >
-              <span style={{ display: 'inline-block' }} data-disabled={isCreateDisabled || undefined}>
-                <Button
-                  onClick={() => {
-                    createMutation.mutate();
-                  }}
-                  disabled={isCreateDisabled}
-                >
-                  Create
-                </Button>
-              </span>
-            </Tooltip>
-          </Group>
-        </Stack>
+        <form autoComplete="off">
+          <Stack>
+            <TextInput
+              label="Username"
+              name="username"
+              autoComplete="new-username"
+              placeholder="admin"
+              value={createUsername}
+              onChange={(event) => setCreateUsername(event.currentTarget.value)}
+            />
+            <PasswordInput
+              label="Password"
+              name="password"
+              autoComplete="new-password"
+              placeholder=" Your Password"
+              value={createPassword}
+              onChange={(event) => setCreatePassword(event.currentTarget.value)}
+            />
+            <Switch
+              label="Grant superadmin access"
+              checked={createSuperadmin}
+              onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
+            />
+            {createDisabled && (
+              <Text size="xs" c="dimmed">
+                Enter both username and password to enable Create.
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" type="button" onClick={createModal.close}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  createMutation.mutate();
+                }}
+                disabled={createDisabled}
+              >
+                Create
+              </Button>
+            </Group>
+          </Stack>
+        </form>
       </Modal>
 
       <Modal opened={editOpened} onClose={editModal.close} title="Update admin user" centered>
