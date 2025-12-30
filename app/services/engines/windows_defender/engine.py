@@ -23,6 +23,7 @@ MIN_RECOMMENDED_TIMEOUT_SECONDS = 10.0
 MAX_CONNECTION_ATTEMPTS = 2
 RETRY_BACKOFF_SECONDS = 1.0
 CONNECT_TIMEOUT_SECONDS = 5.0
+WARM_UP_TIMEOUT_SECONDS = 2.0
 
 
 def _as_bool(value: Any) -> bool:
@@ -67,6 +68,17 @@ def _build_url() -> str:
     host = os.getenv("WINDEFENDER_HOST", DEFAULT_HOST)
     port = int(os.getenv("WINDEFENDER_PORT", str(DEFAULT_PORT)))
     return f"http://{host}:{port}/scan"
+
+
+def warm_up(timeout_seconds: float = WARM_UP_TIMEOUT_SECONDS) -> bool:
+    """Send a lightweight request to the Windows Defender service to reduce cold-start latency."""
+    url = _build_url()
+    try:
+        requests.get(url, timeout=timeout_seconds, allow_redirects=False)
+        return True
+    except requests.RequestException as exc:
+        logger.warning("Windows Defender warm-up failed: %s", exc)
+        return False
 
 
 def _get_timeout_seconds() -> float:
