@@ -126,12 +126,14 @@ export default function AdminUsersPage() {
       userId: string;
       username?: string;
       password?: string;
+      current_password?: string;
       is_superadmin?: boolean;
       is_active?: boolean;
     }) =>
       updateAdminUser(payload.userId, {
         username: payload.username,
         password: payload.password,
+        current_password: payload.current_password,
         is_superadmin: payload.is_superadmin,
         is_active: payload.is_active
       }),
@@ -382,7 +384,7 @@ export default function AdminUsersPage() {
               onChange={(event) => setEditConfirmPassword(event.currentTarget.value)}
               error={editTouched && Boolean(editPassword) && editConfirmPassword !== editPassword}
             />
-            {editingUser?.id === currentAdminId && editPassword && (
+            {editingUser?.id === currentAdminId && (
               <PasswordInput
                 label="Current password"
                 placeholder="Confirm your current password"

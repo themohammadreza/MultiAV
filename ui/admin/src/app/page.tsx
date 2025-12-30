@@ -231,13 +231,36 @@ export default function AdminKeysPage() {
                 leftSection={<IconCopy size={14} />}
                 onClick={async () => {
                   if (!rawKey?.rawKey) return;
-                  await navigator.clipboard.writeText(rawKey.rawKey);
-                  setRawKeyCopied(true);
-                  notifications.show({
-                    title: 'Copied',
-                    message: 'API key copied to clipboard.',
-                    color: 'green'
-                  });
+                  try {
+                    if (navigator.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(rawKey.rawKey);
+                    } else {
+                      const textarea = document.createElement('textarea');
+                      textarea.value = rawKey.rawKey;
+                      textarea.style.position = 'fixed';
+                      textarea.style.opacity = '0';
+                      document.body.appendChild(textarea);
+                      textarea.focus();
+                      textarea.select();
+                      const success = document.execCommand('copy');
+                      document.body.removeChild(textarea);
+                      if (!success) {
+                        throw new Error('Copy command failed');
+                      }
+                    }
+                    setRawKeyCopied(true);
+                    notifications.show({
+                      title: 'Copied',
+                      message: 'API key copied to clipboard.',
+                      color: 'green'
+                    });
+                  } catch (error) {
+                    notifications.show({
+                      title: 'Copy failed',
+                      message: error instanceof Error ? error.message : 'Unable to copy API key.',
+                      color: 'red'
+                    });
+                  }
                 }}
               >
                 Copy

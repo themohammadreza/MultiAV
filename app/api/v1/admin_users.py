@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import AdminSession, get_admin_session
@@ -186,9 +187,18 @@ def delete_admin_user(
 ):
     _require_superadmin(session)
     user = _get_user_or_404(db, user_id)
+    if user.id == session.user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
     if user.is_superadmin:
         if user.is_active and _active_superadmin_count(db, exclude_user_id=user.id) <= 0:
             raise HTTPException(status_code=400, detail="At least one superadmin must remain active")
     db.delete(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="This admin user cannot be deleted because audit logs still reference the account",
+        ) from exc
     return {"ok": True}
