@@ -14,7 +14,7 @@ This plan tracks what has already landed in the Next.js UI and what remains for 
 ## Implemented
 - **Routes/views**: Upload, status dashboard, results detail, and history pages with a shared layout shell.
 - **Authentication**: API key modal stored in browser local storage and surfaced in the header with quota/expiry info from `/api/v1/ui/api-key`.
-- **Data flow**: Typed API layer, polling that stops on terminal status, and health gating via `/api/v1/health`.
+- **Data flow**: Typed API layer, polling that stops on terminal status, and health gating via `/api/v1/health/`.
 - **UX**: Inline results under upload, notifications for success/error, and recent-job autocomplete on the status page.
 - **History**: Server-backed recent jobs table (no client-side upload cache).
 

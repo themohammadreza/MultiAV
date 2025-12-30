@@ -34,9 +34,9 @@ Guidance for AI contributors working on MultiAV. Follow this to avoid breaking c
 
 ## API surface (v1)
 - `POST /api/v1/scan/` — multipart upload (`file` field); returns `{job_id, status, cached}`.
-- `GET /api/v1/results/{job_id}` — aggregated verdict/severity/confidence plus per-engine `details`.
-- `GET /api/v1/ui/jobs/recent` — recent jobs feed with filters.
-- `GET /api/v1/ui/engines/active` — enabled engines with weights/timeouts.
+- `GET /api/v1/results/{job_id}/` — aggregated verdict/severity/confidence plus per-engine `details`.
+- `GET /api/v1/ui/jobs/recent/` — recent jobs feed with filters.
+- `GET /api/v1/ui/engines/active/` — enabled engines with weights/timeouts.
 
 ## UI notes
 - UI relies on `MultiAVClient` (`app/ui/client.py`) with terminal statuses set above.

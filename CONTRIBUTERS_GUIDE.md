@@ -18,15 +18,16 @@ MultiAV is a multi-engine malware scanning service:
 
 Responsibilities:
 - Accept uploads (`POST /api/v1/scan/`)
-- Return aggregated results (`GET /api/v1/results/{job_id}`)
+- Return aggregated results (`GET /api/v1/results/{job_id}/`)
 - Provide UI helper endpoints (`/api/v1/ui/*`)
-- Provide a readiness check (`GET /api/v1/health`) used by the UI during startup
+- Provide a readiness check (`GET /api/v1/health/`) used by the UI during startup
 - Enforce API key authentication and quotas
 
 Key files:
 - `app/api/v1/scan.py`: upload, SHA-256 caching, enqueue Celery scan job
 - `app/api/v1/results.py`: results lookup + summary; does not consume quota (safe for polling)
 - `app/api/v1/ui.py`: lightweight UI endpoints + `/api-key` status endpoint
+- `app/api/v1/health.py`: readiness endpoint that checks database + storage
 
 ### Authentication (API keys)
 **Location:** `app/core/auth.py`
@@ -36,7 +37,7 @@ How it works:
 - Keys are stored hashed (`APIKey.key_hash`).
 - Keys can be bypassed in local development with `BYPASS_AUTH=true`.
 - Keys expire after `API_KEY_TTL_DAYS` (default: 30) using the key’s `created_at` timestamp as the subscription start.
-- `/api/v1/ui/api-key` reports key metadata (name, quota, expiry) for the UI.
+- `/api/v1/ui/api-key/` reports key metadata (name, quota, expiry) for the UI.
 
 ### Rate limiting (daily quota)
 **Location:** `app/core/rate_limit.py`
@@ -44,7 +45,7 @@ How it works:
 How it works:
 - Quotas are **per day** (`APIKey.rate_limit_per_day`).
 - `POST /api/v1/scan/` consumes quota only for **new** scans (cached scans are free).
-- `GET /api/v1/results/{job_id}` is intentionally not consumed (polling is “free”).
+- `GET /api/v1/results/{job_id}/` is intentionally not consumed (polling is “free”).
 - Scan caching is scoped to the requesting API key (or anonymous if auth is bypassed) to prevent cross-tenant reuse.
 - Redis is used for counting when available; tests use an in-memory fallback.
 
@@ -69,6 +70,7 @@ Responsibilities:
 
 Best practice:
 - Do not hardcode “enabled” flags in code. Keep toggles in YAML so deployments can mount read-only config and flip engines without code changes.
+- Engines are lazily imported and can be warmed up at startup (`warm_up_active_engines`) to precompile YARA rules and avoid cold-start latency.
 
 ### Engines
 **Location:** `app/services/engines/*`
@@ -135,6 +137,16 @@ Best practice:
 - Keep client-side polling resilient (backoff, stop on terminal, don’t show full-page loading spinners during background refresh).
 - When adding/renaming API fields, update `ui/web/src/lib/api-types.ts` and the API client.
 
+### Admin UI (Next.js)
+**Location:** `ui/admin/*`
+
+Responsibilities:
+- Provide cookie-based admin authentication (`/api/v1/admin/login/`, `/api/v1/admin/logout/`, `/api/v1/admin/me/`).
+- Manage admin users (activation, superadmin flags, password resets) and API keys via `/api/v1/admin/*`.
+
+Best practice:
+- Keep admin endpoints trailing-slash compliant and update `ui/admin/src/lib/api-types.ts` when changing contracts.
+
 ### Scripts (operator tooling)
 **Location:** `scripts/*`
 
@@ -154,7 +166,7 @@ This is the intended “billing integration” point: when a user renews a subsc
 3. API stores the file and creates/returns a scan job (cache hits are per API key).
 4. Worker runs all enabled engines (in parallel) and persists results.
 5. Finalizer aggregates results and sets the terminal job state.
-6. UI polls `GET /api/v1/results/{job_id}` until terminal (polling doesn’t consume quota).
+6. UI polls `GET /api/v1/results/{job_id}/` until terminal (polling doesn’t consume quota).
 
 ## Running the full stack via Docker Compose
 
@@ -181,7 +193,7 @@ Copy the printed `API Key: ...`.
 - curl:
   ```bash
   curl -H "X-API-Key: <your-key>" -F "file=@/path/to/file.bin" http://localhost:8000/api/v1/scan/
-  curl -H "X-API-Key: <your-key>" http://localhost:8000/api/v1/results/<job_id>
+  curl -H "X-API-Key: <your-key>" http://localhost:8000/api/v1/results/<job_id>/
   ```
 
 ### 4) Optional: local dev bypass
