@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import AdminSession, get_admin_session
-from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage
+from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage, ScanJob
 from app.db.session import get_db
 
 
@@ -25,6 +25,7 @@ class ApiKeyCreateRequest(BaseModel):
 class ApiKeyUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     rate_limit_per_day: int | None = Field(default=None, ge=0, le=100000)
+    is_active: bool | None = None
     rotate: bool = False
 
 
@@ -35,6 +36,7 @@ class ApiKeyResponse(BaseModel):
     created_at: datetime
     revoked_at: datetime | None
     last_used_at: datetime | None
+    is_active: bool
     raw_key: str | None = None
 
 
@@ -119,6 +121,7 @@ def list_keys(
             created_at=key.created_at,
             revoked_at=key.revoked_at,
             last_used_at=key.last_used_at,
+            is_active=key.is_active,
         )
         for key in keys
     ]
@@ -164,6 +167,7 @@ def create_key(
         created_at=api_key.created_at,
         revoked_at=api_key.revoked_at,
         last_used_at=api_key.last_used_at,
+        is_active=api_key.is_active,
         raw_key=raw_key,
     )
 
@@ -186,6 +190,14 @@ def update_key(
 
     if payload.rate_limit_per_day is not None:
         key.rate_limit_per_day = payload.rate_limit_per_day
+        changed = True
+
+    if payload.is_active is not None and payload.is_active != key.is_active:
+        key.is_active = payload.is_active
+        if key.is_active:
+            key.revoked_at = None
+        else:
+            key.revoked_at = datetime.now(timezone.utc)
         changed = True
 
     raw_key = None
@@ -211,6 +223,9 @@ def update_key(
         metadata["new_rate_limit_per_day"] = key.rate_limit_per_day
     if payload.rotate:
         metadata["rotated"] = True
+    if payload.is_active is not None:
+        metadata["is_active"] = key.is_active
+        metadata["revoked_at"] = key.revoked_at.isoformat() if key.revoked_at else None
 
     db.add(key)
     _log_audit_entry(
@@ -230,6 +245,7 @@ def update_key(
         created_at=key.created_at,
         revoked_at=key.revoked_at,
         last_used_at=key.last_used_at,
+        is_active=key.is_active,
         raw_key=raw_key,
     )
 
@@ -262,7 +278,25 @@ def revoke_key(
         created_at=key.created_at,
         revoked_at=key.revoked_at,
         last_used_at=key.last_used_at,
+        is_active=key.is_active,
     )
+
+
+@router.delete("/{key_id}/")
+def delete_key(
+    key_id: str,
+    _: AdminSession = Depends(get_admin_session),
+    db: Session = Depends(get_db),
+):
+    key = _get_key_or_404(db, key_id)
+    db.query(ScanJob).filter(ScanJob.api_key_id == key.id).update(
+        {ScanJob.api_key_id: None}, synchronize_session=False
+    )
+    db.query(ApiKeyUsage).filter(ApiKeyUsage.api_key_id == key.id).delete(synchronize_session=False)
+    db.query(ApiKeyAuditLog).filter(ApiKeyAuditLog.api_key_id == key.id).delete(synchronize_session=False)
+    db.delete(key)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/{key_id}/scans/", response_model=ApiKeyScansResponse)

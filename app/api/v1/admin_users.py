@@ -157,6 +157,8 @@ def update_admin_user(
         changed = True
 
     if payload.is_active is not None and payload.is_active != user.is_active:
+        if user.id == session.user_id and payload.is_active is False:
+            raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
         _ensure_active_superadmin_remains(db, user, user.is_superadmin, payload.is_active)
         user.is_active = payload.is_active
         changed = True

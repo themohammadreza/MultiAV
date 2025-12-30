@@ -17,6 +17,7 @@ export interface AdminApiKey {
   created_at: string;
   revoked_at?: string | null;
   last_used_at?: string | null;
+  is_active: boolean;
   raw_key?: string | null;
 }
 
