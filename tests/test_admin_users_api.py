@@ -84,6 +84,34 @@ def test_superadmin_cannot_deactivate_self(client: httpx.Client):
     assert response.status_code == 400
 
 
+def test_superadmin_must_confirm_current_password_for_self_update(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+    me_response = client.get("/api/v1/admin/users/me/", headers=headers)
+    assert me_response.status_code == 200
+    my_id = me_response.json()["id"]
+
+    missing_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret"},
+    )
+    assert missing_response.status_code == 400
+
+    wrong_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret", "current_password": "wrong"},
+    )
+    assert wrong_response.status_code == 400
+
+    ok_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret", "current_password": "admin"},
+    )
+    assert ok_response.status_code == 200
+
+
 def test_non_superadmin_permissions_are_limited(client: httpx.Client):
     regular_admin = _create_admin("viewer", "viewer-password", is_superadmin=False)
     headers = _login_admin(client, "viewer", "viewer-password")

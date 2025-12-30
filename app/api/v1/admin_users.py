@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import AdminSession, get_admin_session
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.db.models import AdminUser
 from app.db.session import get_db
 
@@ -35,6 +35,7 @@ class AdminUserCreateRequest(BaseModel):
 class AdminUserUpdateRequest(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=255)
     password: str | None = Field(default=None, min_length=1, max_length=255)
+    current_password: str | None = Field(default=None, min_length=1, max_length=255)
     is_superadmin: bool | None = None
     is_active: bool | None = None
 
@@ -147,6 +148,11 @@ def update_admin_user(
             changed = True
 
     if payload.password is not None:
+        if user.id == session.user_id:
+            if payload.current_password is None:
+                raise HTTPException(status_code=400, detail="Current password is required to update your password")
+            if not verify_password(payload.current_password, user.password_hash):
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
         user.password_hash = hash_password(payload.password)
         changed = True
 

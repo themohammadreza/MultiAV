@@ -43,13 +43,18 @@ export default function AdminUsersPage() {
 
   const [createUsername, setCreateUsername] = useState('');
   const [createPassword, setCreatePassword] = useState('');
+  const [createConfirmPassword, setCreateConfirmPassword] = useState('');
   const [createSuperadmin, setCreateSuperadmin] = useState(false);
+  const [createTouched, setCreateTouched] = useState(false);
 
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState('');
+  const [editCurrentPassword, setEditCurrentPassword] = useState('');
   const [editSuperadmin, setEditSuperadmin] = useState(false);
   const [editActive, setEditActive] = useState(true);
+  const [editTouched, setEditTouched] = useState(false);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -64,7 +69,7 @@ export default function AdminUsersPage() {
   } | null>(null);
   const [confirmDeactivateOpened, confirmDeactivateModal] = useDisclosure(false);
 
-  const createDisabled = isCreateDisabled(createUsername, createPassword);
+  const createDisabled = isCreateDisabled(createUsername, createPassword, createConfirmPassword);
 
   const adminMe = useQuery({
     queryKey: ['admin-me'],
@@ -106,7 +111,9 @@ export default function AdminUsersPage() {
       });
       setCreateUsername('');
       setCreatePassword('');
+      setCreateConfirmPassword('');
       setCreateSuperadmin(false);
+      setCreateTouched(false);
       createModal.close();
     },
     onError: (error) => {
@@ -207,8 +214,26 @@ export default function AdminUsersPage() {
         <Button onClick={createModal.open}>Add admin</Button>
       </Group>
 
-      <Modal opened={createOpened} onClose={createModal.close} title="Add admin user" centered>
-        <form autoComplete="off">
+      <Modal
+        opened={createOpened}
+        onClose={() => {
+          createModal.close();
+          setCreateTouched(false);
+        }}
+        title="Add admin user"
+        centered
+      >
+        <form
+          autoComplete="off"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setCreateTouched(true);
+            if (isCreateDisabled(createUsername, createPassword, createConfirmPassword)) {
+              return;
+            }
+            createMutation.mutate();
+          }}
+        >
           <Stack>
             <TextInput
               label="Username"
@@ -217,23 +242,34 @@ export default function AdminUsersPage() {
               placeholder="admin"
               value={createUsername}
               onChange={(event) => setCreateUsername(event.currentTarget.value)}
+              error={createTouched && !createUsername.trim()}
             />
             <PasswordInput
               label="Password"
               name="password"
               autoComplete="new-password"
-              placeholder=" Your Password"
+              placeholder="Create a password"
               value={createPassword}
               onChange={(event) => setCreatePassword(event.currentTarget.value)}
+              error={createTouched && !createPassword}
+            />
+            <PasswordInput
+              label="Confirm password"
+              name="confirm-password"
+              autoComplete="new-password"
+              placeholder="Re-enter the password"
+              value={createConfirmPassword}
+              onChange={(event) => setCreateConfirmPassword(event.currentTarget.value)}
+              error={createTouched && (!createConfirmPassword || createPassword !== createConfirmPassword)}
             />
             <Switch
               label="Grant superadmin access"
               checked={createSuperadmin}
               onChange={(event) => setCreateSuperadmin(event.currentTarget.checked)}
             />
-            {createDisabled && (
-              <Text size="xs" c="dimmed">
-                Enter both username and password to enable Create.
+            {createTouched && createDisabled && (
+              <Text size="xs" c="red">
+                * Enter a username and matching passwords to enable Create.
               </Text>
             )}
             <Group justify="flex-end">
@@ -241,10 +277,7 @@ export default function AdminUsersPage() {
                 Cancel
               </Button>
               <Button
-                type="button"
-                onClick={() => {
-                  createMutation.mutate();
-                }}
+                type="submit"
                 disabled={createDisabled}
               >
                 Create
@@ -254,94 +287,152 @@ export default function AdminUsersPage() {
         </form>
       </Modal>
 
-      <Modal opened={editOpened} onClose={editModal.close} title="Update admin user" centered>
-        <Stack>
-          <TextInput
-            label="Username"
-            value={editUsername}
-            onChange={(event) => setEditUsername(event.currentTarget.value)}
-          />
-          <PasswordInput
-            label="Reset password"
-            value={editPassword}
-            onChange={(event) => setEditPassword(event.currentTarget.value)}
-          />
-          <Switch
-            label="Superadmin access"
-            checked={editSuperadmin}
-            onChange={(event) => setEditSuperadmin(event.currentTarget.checked)}
-          />
-          <Switch
-            label="Active"
-            checked={editActive}
-            disabled={Boolean(
-              (editingUser?.is_superadmin && editingUser.is_active && activeSuperadminCount <= 1) ||
-                editingUser?.id === currentAdminId
+      <Modal
+        opened={editOpened}
+        onClose={() => {
+          editModal.close();
+          setEditTouched(false);
+        }}
+        title="Update admin user"
+        centered
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            setEditTouched(true);
+            if (!editingUser) return;
+            const trimmedUsername = editUsername.trim();
+            const requiresPasswordConfirm = Boolean(editPassword);
+            const isSelfEdit = editingUser.id === currentAdminId;
+            if (
+              requiresPasswordConfirm &&
+              (!editConfirmPassword || editConfirmPassword !== editPassword)
+            ) {
+              return;
+            }
+            if (requiresPasswordConfirm && isSelfEdit && !editCurrentPassword) {
+              return;
+            }
+            const payload: {
+              userId: string;
+              username?: string;
+              password?: string;
+              current_password?: string;
+              is_superadmin?: boolean;
+              is_active?: boolean;
+            } = { userId: editingUser.id };
+            if (trimmedUsername && trimmedUsername !== editingUser.username) {
+              payload.username = trimmedUsername;
+            }
+            if (editPassword) {
+              payload.password = editPassword;
+              if (isSelfEdit) {
+                payload.current_password = editCurrentPassword;
+              }
+            }
+            if (editSuperadmin !== editingUser.is_superadmin) {
+              payload.is_superadmin = editSuperadmin;
+            }
+            if (editActive !== editingUser.is_active) {
+              payload.is_active = editActive;
+            }
+            if (
+              !payload.username &&
+              !payload.password &&
+              payload.is_superadmin === undefined &&
+              payload.is_active === undefined
+            ) {
+              notifications.show({
+                title: 'No changes',
+                message: 'Update at least one field before saving.',
+                color: 'yellow'
+              });
+              return;
+            }
+            if (
+              payload.is_active === false &&
+              editingUser.is_superadmin &&
+              editingUser.id !== currentAdminId
+            ) {
+              setPendingUpdate({ user: editingUser, payload });
+              confirmDeactivateModal.open();
+              editModal.close();
+              return;
+            }
+            updateMutation.mutate(payload);
+          }}
+        >
+          <Stack>
+            <TextInput
+              label="Username"
+              value={editUsername}
+              onChange={(event) => setEditUsername(event.currentTarget.value)}
+            />
+            <PasswordInput
+              label="New password"
+              placeholder="Enter a new password"
+              value={editPassword}
+              onChange={(event) => setEditPassword(event.currentTarget.value)}
+              error={editTouched && !editConfirmPassword && Boolean(editPassword)}
+            />
+            <PasswordInput
+              label="Confirm new password"
+              placeholder="Re-enter the new password"
+              value={editConfirmPassword}
+              onChange={(event) => setEditConfirmPassword(event.currentTarget.value)}
+              error={editTouched && Boolean(editPassword) && editConfirmPassword !== editPassword}
+            />
+            {editingUser?.id === currentAdminId && editPassword && (
+              <PasswordInput
+                label="Current password"
+                placeholder="Confirm your current password"
+                value={editCurrentPassword}
+                onChange={(event) => setEditCurrentPassword(event.currentTarget.value)}
+                error={editTouched && Boolean(editPassword) && !editCurrentPassword}
+              />
             )}
-            onChange={(event) => setEditActive(event.currentTarget.checked)}
-          />
-          {editingUser?.id === currentAdminId && (
-            <Text size="xs" c="dimmed">
-              You cannot deactivate your own account.
-            </Text>
-          )}
-          <Group justify="flex-end">
-            <Button variant="default" onClick={editModal.close}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (!editingUser) return;
-                const trimmedUsername = editUsername.trim();
-                const payload: {
-                  userId: string;
-                  username?: string;
-                  password?: string;
-                  is_superadmin?: boolean;
-                  is_active?: boolean;
-                } = { userId: editingUser.id };
-                if (trimmedUsername && trimmedUsername !== editingUser.username) {
-                  payload.username = trimmedUsername;
-                }
-                if (editPassword) {
-                  payload.password = editPassword;
-                }
-                if (editSuperadmin !== editingUser.is_superadmin) {
-                  payload.is_superadmin = editSuperadmin;
-                }
-                if (editActive !== editingUser.is_active) {
-                  payload.is_active = editActive;
-                }
-                if (
-                  !payload.username &&
-                  !payload.password &&
-                  payload.is_superadmin === undefined &&
-                  payload.is_active === undefined
-                ) {
-                  notifications.show({
-                    title: 'No changes',
-                    message: 'Update at least one field before saving.',
-                    color: 'yellow'
-                  });
-                  return;
-                }
-                if (
-                  payload.is_active === false &&
-                  editingUser.is_superadmin &&
-                  editingUser.id !== currentAdminId
-                ) {
-                  setPendingUpdate({ user: editingUser, payload });
-                  confirmDeactivateModal.open();
-                  editModal.close();
-                  return;
-                }
-                updateMutation.mutate(payload);
-              }}
-            >
-              Save changes
-            </Button>
-          </Group>
-        </Stack>
+            <Switch
+              label="Superadmin access"
+              checked={editSuperadmin}
+              onChange={(event) => setEditSuperadmin(event.currentTarget.checked)}
+            />
+            <Switch
+              label="Active"
+              checked={editActive}
+              disabled={Boolean(
+                (editingUser?.is_superadmin && editingUser.is_active && activeSuperadminCount <= 1) ||
+                  editingUser?.id === currentAdminId
+              )}
+              onChange={(event) => setEditActive(event.currentTarget.checked)}
+            />
+            {editingUser?.id === currentAdminId && (
+              <Text size="xs" c="dimmed">
+                You cannot deactivate your own account.
+              </Text>
+            )}
+            {editTouched && editPassword && !editConfirmPassword && (
+              <Text size="xs" c="red">
+                * Confirm the new password to continue.
+              </Text>
+            )}
+            {editTouched && editPassword && editConfirmPassword && editConfirmPassword !== editPassword && (
+              <Text size="xs" c="red">
+                * Passwords do not match.
+              </Text>
+            )}
+            {editTouched && editPassword && editingUser?.id === currentAdminId && !editCurrentPassword && (
+              <Text size="xs" c="red">
+                * Enter your current password to confirm the change.
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" type="button" onClick={editModal.close}>
+                Cancel
+              </Button>
+              <Button type="submit">Save changes</Button>
+            </Group>
+          </Stack>
+        </form>
       </Modal>
 
       <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete admin user?" centered>
@@ -480,15 +571,18 @@ export default function AdminUsersPage() {
                     <ActionIcon
                       variant="default"
                       aria-label="Edit admin"
-                      onClick={() => {
-                        setEditingUser(user);
-                        setEditUsername(user.username);
-                        setEditPassword('');
-                        setEditSuperadmin(user.is_superadmin);
-                        setEditActive(user.is_active);
-                        editModal.open();
-                      }}
-                    >
+                    onClick={() => {
+                      setEditingUser(user);
+                      setEditUsername(user.username);
+                      setEditPassword('');
+                      setEditConfirmPassword('');
+                      setEditCurrentPassword('');
+                      setEditSuperadmin(user.is_superadmin);
+                      setEditActive(user.is_active);
+                      setEditTouched(false);
+                      editModal.open();
+                    }}
+                  >
                       <IconPencil size={16} />
                     </ActionIcon>
                     <ActionIcon
