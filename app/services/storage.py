@@ -91,6 +91,18 @@ class StorageService:
                 logger.error("Failed to ensure bucket %s exists: %s", self.bucket, exc)
                 raise
 
+    def check_ready(self) -> None:
+        if self.backend == "s3":
+            self._client.head_bucket(Bucket=self.bucket)
+            return
+        if self.backend == "local":
+            if not self.base_path.exists():
+                raise FileNotFoundError(f"Storage path not found: {self.base_path}")
+            if not self.base_path.is_dir():
+                raise NotADirectoryError(f"Storage path is not a directory: {self.base_path}")
+            return
+        raise ValueError(f"Unsupported storage backend: {self.backend}")
+
     async def save_file(self, upload: UploadFile) -> Tuple[str, str]:
         temp = NamedTemporaryFile(delete=False)
         sha256 = hashlib.sha256()

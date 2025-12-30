@@ -108,4 +108,32 @@ def test_active_engines_uses_registry(monkeypatch, client: httpx.Client):
 def test_health_endpoint(client: httpx.Client):
     response = client.get("/api/v1/health/")
     assert response.status_code == 200
-    assert response.json().get("status") == "ok"
+    payload = response.json()
+    assert payload.get("status") == "ok"
+    assert payload.get("checks") == {"database": "ok", "storage": "ok"}
+
+
+def test_health_endpoint_db_failure(monkeypatch, client: httpx.Client):
+    from app.api.v1 import health as health_module
+
+    monkeypatch.setattr(health_module, "_check_database", lambda: (False, "db down"))
+
+    response = client.get("/api/v1/health/")
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["status"] == "error"
+    assert payload["checks"]["database"] == "error"
+    assert payload["errors"]["database"] == "db down"
+
+
+def test_health_endpoint_storage_failure(monkeypatch, client: httpx.Client):
+    from app.api.v1 import health as health_module
+
+    monkeypatch.setattr(health_module, "_check_storage", lambda: (False, "storage down"))
+
+    response = client.get("/api/v1/health/")
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["status"] == "error"
+    assert payload["checks"]["storage"] == "error"
+    assert payload["errors"]["storage"] == "storage down"
