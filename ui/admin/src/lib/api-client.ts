@@ -153,7 +153,13 @@ export async function createAdminUser(payload: {
 
 export async function updateAdminUser(
   userId: string,
-  payload: { username?: string; password?: string; is_superadmin?: boolean; is_active?: boolean }
+  payload: {
+    username?: string;
+    password?: string;
+    current_password?: string;
+    is_superadmin?: boolean;
+    is_active?: boolean;
+  }
 ): Promise<AdminUser> {
   const response = await fetch(
     `${apiBase}/api/v1/admin/users/${userId}/`,

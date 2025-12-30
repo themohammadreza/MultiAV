@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
+import math
+import os
 import secrets
 from uuid import UUID
 
@@ -15,6 +17,7 @@ from app.db.session import get_db
 
 
 router = APIRouter()
+API_KEY_TTL_DAYS = int(os.getenv("API_KEY_TTL_DAYS", "30"))
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -37,6 +40,8 @@ class ApiKeyResponse(BaseModel):
     revoked_at: datetime | None
     last_used_at: datetime | None
     is_active: bool
+    expires_at: datetime
+    days_remaining: int
     raw_key: str | None = None
 
 
@@ -88,6 +93,17 @@ def _get_key_or_404(db: Session, key_id: str) -> APIKeyModel:
     return key
 
 
+def _calculate_key_expiration(created_at: datetime | None) -> tuple[datetime, int]:
+    now = datetime.now(timezone.utc)
+    created = created_at or now
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    expires_at = created + timedelta(days=API_KEY_TTL_DAYS)
+    remaining_seconds = max(0, (expires_at - now).total_seconds())
+    days_remaining = int(math.ceil(remaining_seconds / 86400)) if remaining_seconds else 0
+    return expires_at, days_remaining
+
+
 def _log_audit_entry(
     db: Session,
     *,
@@ -113,18 +129,23 @@ def list_keys(
     db: Session = Depends(get_db),
 ):
     keys = db.query(APIKeyModel).order_by(APIKeyModel.created_at.desc()).all()
-    return [
-        ApiKeyResponse(
-            id=str(key.id),
-            name=key.name,
-            rate_limit_per_day=int(key.rate_limit_per_day or 0),
-            created_at=key.created_at,
-            revoked_at=key.revoked_at,
-            last_used_at=key.last_used_at,
-            is_active=key.is_active,
+    responses = []
+    for key in keys:
+        expires_at, days_remaining = _calculate_key_expiration(key.created_at)
+        responses.append(
+            ApiKeyResponse(
+                id=str(key.id),
+                name=key.name,
+                rate_limit_per_day=int(key.rate_limit_per_day or 0),
+                created_at=key.created_at,
+                revoked_at=key.revoked_at,
+                last_used_at=key.last_used_at,
+                is_active=key.is_active,
+                expires_at=expires_at,
+                days_remaining=days_remaining,
+            )
         )
-        for key in keys
-    ]
+    return responses
 
 
 @router.post("/", response_model=ApiKeyResponse)
@@ -160,6 +181,7 @@ def create_key(
     db.commit()
     db.refresh(api_key)
 
+    expires_at, days_remaining = _calculate_key_expiration(api_key.created_at)
     return ApiKeyResponse(
         id=str(api_key.id),
         name=api_key.name,
@@ -168,6 +190,8 @@ def create_key(
         revoked_at=api_key.revoked_at,
         last_used_at=api_key.last_used_at,
         is_active=api_key.is_active,
+        expires_at=expires_at,
+        days_remaining=days_remaining,
         raw_key=raw_key,
     )
 
@@ -238,6 +262,7 @@ def update_key(
     db.commit()
     db.refresh(key)
 
+    expires_at, days_remaining = _calculate_key_expiration(key.created_at)
     return ApiKeyResponse(
         id=str(key.id),
         name=key.name,
@@ -246,6 +271,8 @@ def update_key(
         revoked_at=key.revoked_at,
         last_used_at=key.last_used_at,
         is_active=key.is_active,
+        expires_at=expires_at,
+        days_remaining=days_remaining,
         raw_key=raw_key,
     )
 

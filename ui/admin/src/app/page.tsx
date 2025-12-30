@@ -22,7 +22,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconKey, IconPencil, IconRefresh, IconTrash } from '@tabler/icons-react';
+import { IconCopy, IconKey, IconPencil, IconRefresh, IconTrash } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminApiKey } from '@/lib/api-types';
 import { createAdminKey, deleteAdminKey, fetchAdminKeyScans, listAdminKeys, updateAdminKey } from '@/lib/api-client';
@@ -39,10 +39,18 @@ function formatDate(value?: string | null): string {
   return parsed.toLocaleString();
 }
 
+function formatRemainingDays(daysRemaining: number, isActive: boolean): string {
+  if (!isActive) return 'Inactive';
+  if (daysRemaining <= 0) return 'Expired';
+  if (daysRemaining === 1) return '1 day left';
+  return `${daysRemaining} days left`;
+}
+
 export default function AdminKeysPage() {
   const queryClient = useQueryClient();
   const [createName, setCreateName] = useState('');
   const [createRateLimit, setCreateRateLimit] = useState<number | ''>(60);
+  const [createTouched, setCreateTouched] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [scanPage, setScanPage] = useState(1);
   const [editingKey, setEditingKey] = useState<AdminApiKey | null>(null);
@@ -51,6 +59,7 @@ export default function AdminKeysPage() {
   const [rotateKey, setRotateKey] = useState<AdminApiKey | null>(null);
   const [deleteKey, setDeleteKey] = useState<AdminApiKey | null>(null);
   const [rawKey, setRawKey] = useState<{ name: string; rawKey: string } | null>(null);
+  const [rawKeyCopied, setRawKeyCopied] = useState(false);
   const [editModalOpened, editModal] = useDisclosure(false);
   const [rawKeyModalOpened, rawKeyModal] = useDisclosure(false);
   const [rotateModalOpened, rotateModal] = useDisclosure(false);
@@ -102,9 +111,11 @@ export default function AdminKeysPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-keys'] });
       setCreateName('');
       setCreateRateLimit(60);
+      setCreateTouched(false);
       notifications.show({ title: 'API key created', message: `Key ${data.name} is ready.`, color: 'green' });
       if (data.raw_key) {
         setRawKey({ name: data.name, rawKey: data.raw_key });
+        setRawKeyCopied(false);
         rawKeyModal.open();
       }
     },
@@ -129,6 +140,7 @@ export default function AdminKeysPage() {
       notifications.show({ title: 'API key updated', message: `Updated ${data.name}.`, color: 'green' });
       if (data.raw_key) {
         setRawKey({ name: data.name, rawKey: data.raw_key });
+        setRawKeyCopied(false);
         rawKeyModal.open();
       }
     },
@@ -196,21 +208,52 @@ export default function AdminKeysPage() {
         </Stack>
       </Modal>
 
-      <Modal opened={rawKeyModalOpened} onClose={rawKeyModal.close} title="Copy your API key" centered>
+      <Modal
+        opened={rawKeyModalOpened}
+        onClose={() => {
+          rawKeyModal.close();
+          setRawKeyCopied(false);
+        }}
+        title="Copy your API key"
+        centered
+      >
         <Stack>
           <Text size="sm" c="dimmed">
             This key is shown only once. Store it in a secure vault before closing this dialog.
           </Text>
           <Card withBorder>
             <Text fw={600}>{rawKey?.name}</Text>
-            <Text mt="xs" style={{ wordBreak: 'break-all' }}>
-              {rawKey?.rawKey}
-            </Text>
+            <Group mt="xs" align="flex-start" gap="xs">
+              <Text style={{ wordBreak: 'break-all', flex: 1 }}>{rawKey?.rawKey}</Text>
+              <Button
+                variant="light"
+                size="xs"
+                leftSection={<IconCopy size={14} />}
+                onClick={async () => {
+                  if (!rawKey?.rawKey) return;
+                  await navigator.clipboard.writeText(rawKey.rawKey);
+                  setRawKeyCopied(true);
+                  notifications.show({
+                    title: 'Copied',
+                    message: 'API key copied to clipboard.',
+                    color: 'green'
+                  });
+                }}
+              >
+                Copy
+              </Button>
+            </Group>
           </Card>
+          {rawKeyCopied && (
+            <Text size="sm" fw={600} style={{ backgroundColor: 'var(--mantine-color-green-1)', color: 'var(--mantine-color-green-8)', padding: '6px 10px', borderRadius: 6 }}>
+              Copied
+            </Text>
+          )}
           <Button
             onClick={() => {
               rawKeyModal.close();
               setRawKey(null);
+              setRawKeyCopied(false);
             }}
           >
             I have copied it
@@ -273,42 +316,56 @@ export default function AdminKeysPage() {
             <Title order={4}>Create API key</Title>
             <Badge color="gray">Admin</Badge>
           </Group>
-          <Group align="end">
-            <TextInput
-              label="Key name"
-              placeholder="Frontend service"
-              value={createName}
-              onChange={(event) => setCreateName(event.currentTarget.value)}
-              style={{ flex: 1 }}
-            />
-            <NumberInput
-              label="Rate limit per day"
-              value={createRateLimit}
-              min={0}
-              max={100000}
-              onChange={(value) => {
-                if (value === '') {
-                  setCreateRateLimit('');
-                  return;
-                }
-                if (typeof value === 'number') {
-                  setCreateRateLimit(value);
-                  return;
-                }
-                const parsed = Number(value);
-                setCreateRateLimit(Number.isNaN(parsed) ? '' : parsed);
-              }}
-              style={{ maxWidth: 200 }}
-            />
-            <Button
-              leftSection={<IconKey size={16} />}
-              loading={createMutation.isPending}
-              disabled={!createName.trim()}
-              onClick={() => createMutation.mutate()}
-            >
-              Create
-            </Button>
-          </Group>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setCreateTouched(true);
+              if (!createName.trim()) {
+                return;
+              }
+              createMutation.mutate();
+            }}
+          >
+            <Stack>
+              <Group align="end">
+                <TextInput
+                  label="Key name"
+                  placeholder="Frontend service"
+                  value={createName}
+                  onChange={(event) => setCreateName(event.currentTarget.value)}
+                  style={{ flex: 1 }}
+                  error={createTouched && !createName.trim()}
+                />
+                <NumberInput
+                  label="Rate limit per day"
+                  value={createRateLimit}
+                  min={0}
+                  max={100000}
+                  onChange={(value) => {
+                    if (value === '') {
+                      setCreateRateLimit('');
+                      return;
+                    }
+                    if (typeof value === 'number') {
+                      setCreateRateLimit(value);
+                      return;
+                    }
+                    const parsed = Number(value);
+                    setCreateRateLimit(Number.isNaN(parsed) ? '' : parsed);
+                  }}
+                  style={{ maxWidth: 200 }}
+                />
+                <Button leftSection={<IconKey size={16} />} loading={createMutation.isPending} type="submit">
+                  Create
+                </Button>
+              </Group>
+              {createTouched && !createName.trim() && (
+                <Text size="xs" c="red">
+                  * Enter a key name to create an API key.
+                </Text>
+              )}
+            </Stack>
+          </form>
         </Stack>
       </Card>
 
@@ -351,7 +408,7 @@ export default function AdminKeysPage() {
                     <Table.Td>
                       {formatDate(key.created_at)}
                     </Table.Td>
-                    <Table.Td>{formatDate(key.revoked_at)}</Table.Td>
+                    <Table.Td>{formatRemainingDays(key.days_remaining, key.is_active)}</Table.Td>
                     <Table.Td>
                       <Group gap="xs">
                         <Badge color={key.is_active ? 'green' : 'red'}>
