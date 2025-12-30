@@ -70,6 +70,20 @@ def test_superadmin_cannot_deactivate_last_active_superadmin(client: httpx.Clien
     assert response.status_code == 400
 
 
+def test_superadmin_cannot_deactivate_self(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+    me_response = client.get("/api/v1/admin/users/me/", headers=headers)
+    assert me_response.status_code == 200
+    my_id = me_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert response.status_code == 400
+
+
 def test_non_superadmin_permissions_are_limited(client: httpx.Client):
     regular_admin = _create_admin("viewer", "viewer-password", is_superadmin=False)
     headers = _login_admin(client, "viewer", "viewer-password")

@@ -12,6 +12,7 @@ import {
   NumberInput,
   Pagination,
   Stack,
+  Switch,
   Table,
   Text,
   TextInput,
@@ -21,10 +22,10 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconBan, IconKey, IconPencil, IconRefresh } from '@tabler/icons-react';
+import { IconKey, IconPencil, IconRefresh, IconTrash } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminApiKey } from '@/lib/api-types';
-import { createAdminKey, fetchAdminKeyScans, listAdminKeys, revokeAdminKey, updateAdminKey } from '@/lib/api-client';
+import { createAdminKey, deleteAdminKey, fetchAdminKeyScans, listAdminKeys, updateAdminKey } from '@/lib/api-client';
 import { toTitleCase } from '@/lib/formatters';
 
 const SCANS_PAGE_SIZE = 10;
@@ -48,12 +49,12 @@ export default function AdminKeysPage() {
   const [editName, setEditName] = useState('');
   const [editRateLimit, setEditRateLimit] = useState<number | ''>('');
   const [rotateKey, setRotateKey] = useState<AdminApiKey | null>(null);
-  const [revokeKey, setRevokeKey] = useState<AdminApiKey | null>(null);
+  const [deleteKey, setDeleteKey] = useState<AdminApiKey | null>(null);
   const [rawKey, setRawKey] = useState<{ name: string; rawKey: string } | null>(null);
   const [editModalOpened, editModal] = useDisclosure(false);
   const [rawKeyModalOpened, rawKeyModal] = useDisclosure(false);
   const [rotateModalOpened, rotateModal] = useDisclosure(false);
-  const [revokeModalOpened, revokeModal] = useDisclosure(false);
+  const [deleteModalOpened, deleteModal] = useDisclosure(false);
 
   const keysQuery = useQuery({
     queryKey: ['admin-keys'],
@@ -65,6 +66,12 @@ export default function AdminKeysPage() {
   useEffect(() => {
     if (!selectedKeyId && keys.length > 0) {
       setSelectedKeyId(keys[0].id);
+    }
+  }, [keys, selectedKeyId]);
+
+  useEffect(() => {
+    if (selectedKeyId && !keys.some((key) => key.id === selectedKeyId)) {
+      setSelectedKeyId(keys[0]?.id ?? null);
     }
   }, [keys, selectedKeyId]);
 
@@ -107,8 +114,16 @@ export default function AdminKeysPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ keyId, ...payload }: { keyId: string; name?: string; rate_limit_per_day?: number | null; rotate?: boolean }) =>
-      updateAdminKey(keyId, payload),
+    mutationFn: ({
+      keyId,
+      ...payload
+    }: {
+      keyId: string;
+      name?: string;
+      rate_limit_per_day?: number | null;
+      rotate?: boolean;
+      is_active?: boolean;
+    }) => updateAdminKey(keyId, payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-keys'] });
       notifications.show({ title: 'API key updated', message: `Updated ${data.name}.`, color: 'green' });
@@ -122,14 +137,14 @@ export default function AdminKeysPage() {
     }
   });
 
-  const revokeMutation = useMutation({
-    mutationFn: (keyId: string) => revokeAdminKey(keyId),
-    onSuccess: (data) => {
+  const deleteMutation = useMutation({
+    mutationFn: (keyId: string) => deleteAdminKey(keyId),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-keys'] });
-      notifications.show({ title: 'API key revoked', message: `${data.name} is now inactive.`, color: 'orange' });
+      notifications.show({ title: 'API key deleted', message: 'The API key was removed.', color: 'orange' });
     },
     onError: (error) => {
-      notifications.show({ title: 'Revoke failed', message: error.message, color: 'red' });
+      notifications.show({ title: 'Delete failed', message: error.message, color: 'red' });
     }
   });
 
@@ -226,24 +241,27 @@ export default function AdminKeysPage() {
         </Stack>
       </Modal>
 
-      <Modal opened={revokeModalOpened} onClose={revokeModal.close} title="Revoke API key?" centered>
+      <Modal opened={deleteModalOpened} onClose={deleteModal.close} title="Delete API key?" centered>
         <Stack>
           <Text>
-            Revoking <strong>{revokeKey?.name}</strong> will block new scans with this key.
+            This will permanently delete <strong>{deleteKey?.name}</strong>.
+          </Text>
+          <Text size="sm" c="red">
+            This action cannot be undone.
           </Text>
           <Group justify="flex-end">
-            <Button variant="default" onClick={revokeModal.close}>
+            <Button variant="default" onClick={deleteModal.close}>
               Cancel
             </Button>
             <Button
               color="red"
               onClick={() => {
-                if (!revokeKey) return;
-                revokeMutation.mutate(revokeKey.id);
-                revokeModal.close();
+                if (!deleteKey) return;
+                deleteMutation.mutate(deleteKey.id);
+                deleteModal.close();
               }}
             >
-              Revoke key
+              Delete key
             </Button>
           </Group>
         </Stack>
@@ -313,6 +331,8 @@ export default function AdminKeysPage() {
                 <Table.Tr>
                   <Table.Th>Name</Table.Th>
                   <Table.Th>Quota/day</Table.Th>
+                  <Table.Th>Created at</Table.Th>
+                  <Table.Th>Expired at</Table.Th>
                   <Table.Th>Status</Table.Th>
                   <Table.Th>Last used</Table.Th>
                   <Table.Th>Actions</Table.Th>
@@ -329,7 +349,28 @@ export default function AdminKeysPage() {
                     </Table.Td>
                     <Table.Td>{key.rate_limit_per_day}</Table.Td>
                     <Table.Td>
-                      <Badge color={key.revoked_at ? 'red' : 'green'}>{key.revoked_at ? 'Revoked' : 'Active'}</Badge>
+                      {formatDate(key.created_at)}
+                    </Table.Td>
+                    <Table.Td>{formatDate(key.revoked_at)}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Badge color={key.is_active ? 'green' : 'red'}>
+                          {key.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <Switch
+                          size="sm"
+                          checked={key.is_active}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            updateMutation.mutate({
+                              keyId: key.id,
+                              is_active: event.currentTarget.checked
+                            });
+                          }}
+                          aria-label={key.is_active ? 'Deactivate API key' : 'Activate API key'}
+                        />
+                      </Group>
                     </Table.Td>
                     <Table.Td>{formatDate(key.last_used_at)}</Table.Td>
                     <Table.Td>
@@ -360,17 +401,17 @@ export default function AdminKeysPage() {
                             <IconRefresh size={16} />
                           </ActionIcon>
                         </Tooltip>
-                        <Tooltip label="Revoke key">
+                        <Tooltip label="Delete key">
                           <ActionIcon
                             variant="default"
                             color="red"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setRevokeKey(key);
-                              revokeModal.open();
+                              setDeleteKey(key);
+                              deleteModal.open();
                             }}
                           >
-                            <IconBan size={16} />
+                            <IconTrash size={16} />
                           </ActionIcon>
                         </Tooltip>
                       </Group>

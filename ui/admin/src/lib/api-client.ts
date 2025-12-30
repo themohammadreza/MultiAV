@@ -98,7 +98,7 @@ export async function createAdminKey(payload: { name: string; rate_limit_per_day
 
 export async function updateAdminKey(
   keyId: string,
-  payload: { name?: string; rate_limit_per_day?: number | null; rotate?: boolean }
+  payload: { name?: string; rate_limit_per_day?: number | null; rotate?: boolean; is_active?: boolean }
 ): Promise<AdminApiKey> {
   const response = await fetch(
     `${apiBase}/api/v1/admin/keys/${keyId}/`,
@@ -114,6 +114,11 @@ export async function updateAdminKey(
 export async function revokeAdminKey(keyId: string): Promise<AdminApiKey> {
   const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/revoke/`, withAuth({ method: 'POST' }));
   return handleResponse<AdminApiKey>(response);
+}
+
+export async function deleteAdminKey(keyId: string): Promise<{ ok: boolean }> {
+  const response = await fetch(`${apiBase}/api/v1/admin/keys/${keyId}/`, withAuth({ method: 'DELETE' }));
+  return handleResponse<{ ok: boolean }>(response);
 }
 
 export async function fetchAdminKeyScans(keyId: string, limit: number, offset: number): Promise<AdminKeyScansResponse> {

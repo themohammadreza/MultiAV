@@ -52,6 +52,17 @@ export default function AdminUsersPage() {
   const [editActive, setEditActive] = useState(true);
 
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    user: AdminUser;
+    payload: {
+      userId: string;
+      username?: string;
+      password?: string;
+      is_superadmin?: boolean;
+      is_active?: boolean;
+    };
+  } | null>(null);
+  const [confirmDeactivateOpened, confirmDeactivateModal] = useDisclosure(false);
 
   const createDisabled = isCreateDisabled(createUsername, createPassword);
 
@@ -61,6 +72,7 @@ export default function AdminUsersPage() {
     retry: false
   });
   const isSuperadmin = Boolean(adminMe.data?.is_superadmin);
+  const currentAdminId = adminMe.data?.id;
 
   const usersQuery = useQuery({
     queryKey: ['admin-users'],
@@ -263,10 +275,16 @@ export default function AdminUsersPage() {
             label="Active"
             checked={editActive}
             disabled={Boolean(
-              editingUser?.is_superadmin && editingUser.is_active && activeSuperadminCount <= 1
+              (editingUser?.is_superadmin && editingUser.is_active && activeSuperadminCount <= 1) ||
+                editingUser?.id === currentAdminId
             )}
             onChange={(event) => setEditActive(event.currentTarget.checked)}
           />
+          {editingUser?.id === currentAdminId && (
+            <Text size="xs" c="dimmed">
+              You cannot deactivate your own account.
+            </Text>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={editModal.close}>
               Cancel
@@ -307,6 +325,16 @@ export default function AdminUsersPage() {
                   });
                   return;
                 }
+                if (
+                  payload.is_active === false &&
+                  editingUser.is_superadmin &&
+                  editingUser.id !== currentAdminId
+                ) {
+                  setPendingUpdate({ user: editingUser, payload });
+                  confirmDeactivateModal.open();
+                  editModal.close();
+                  return;
+                }
                 updateMutation.mutate(payload);
               }}
             >
@@ -321,6 +349,11 @@ export default function AdminUsersPage() {
           <Text>
             This will permanently remove <strong>{deleteUser?.username}</strong>.
           </Text>
+          {deleteUser?.is_superadmin && (
+            <Text size="sm" c="red">
+              User {deleteUser.username} is a superadmin. Are you sure?
+            </Text>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={deleteModal.close}>
               Cancel
@@ -333,6 +366,45 @@ export default function AdminUsersPage() {
               }}
             >
               Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={confirmDeactivateOpened}
+        onClose={() => {
+          setPendingUpdate(null);
+          confirmDeactivateModal.close();
+        }}
+        title="Deactivate superadmin?"
+        centered
+      >
+        <Stack>
+          <Text>
+            User <strong>{pendingUpdate?.user.username}</strong> is a superadmin. Are you sure you want to deactivate
+            this account?
+          </Text>
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                setPendingUpdate(null);
+                confirmDeactivateModal.close();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="orange"
+              onClick={() => {
+                if (!pendingUpdate) return;
+                updateMutation.mutate(pendingUpdate.payload);
+                setPendingUpdate(null);
+                confirmDeactivateModal.close();
+              }}
+            >
+              Deactivate
             </Button>
           </Group>
         </Stack>
@@ -367,18 +439,34 @@ export default function AdminUsersPage() {
                       {user.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                     <Tooltip
-                      label="At least one active superadmin is required."
-                      disabled={!(user.is_superadmin && user.is_active && activeSuperadminCount <= 1)}
+                      label={
+                        user.id === currentAdminId
+                          ? 'You cannot deactivate your own account.'
+                          : 'At least one active superadmin is required.'
+                      }
+                      disabled={
+                        !(user.is_superadmin && user.is_active && activeSuperadminCount <= 1) &&
+                        user.id !== currentAdminId
+                      }
                     >
                       <Switch
                         size="sm"
                         checked={user.is_active}
-                        disabled={user.is_superadmin && user.is_active && activeSuperadminCount <= 1}
+                        disabled={
+                          (user.is_superadmin && user.is_active && activeSuperadminCount <= 1) ||
+                          user.id === currentAdminId
+                        }
                         onChange={(event) => {
-                          updateMutation.mutate({
-                            userId: user.id,
-                            is_active: event.currentTarget.checked
-                          });
+                          const nextActive = event.currentTarget.checked;
+                          if (!nextActive && user.is_superadmin && user.id !== currentAdminId) {
+                            setPendingUpdate({
+                              user,
+                              payload: { userId: user.id, is_active: nextActive }
+                            });
+                            confirmDeactivateModal.open();
+                            return;
+                          }
+                          updateMutation.mutate({ userId: user.id, is_active: nextActive });
                         }}
                         aria-label={user.is_active ? 'Deactivate admin' : 'Activate admin'}
                       />

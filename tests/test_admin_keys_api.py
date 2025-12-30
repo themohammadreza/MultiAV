@@ -18,7 +18,7 @@ def _login_admin(client: httpx.Client) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_create_list_rotate_revoke_keys(client: httpx.Client):
+def test_create_list_rotate_toggle_delete_keys(client: httpx.Client):
     headers = _login_admin(client)
 
     create_response = client.post(
@@ -49,13 +49,39 @@ def test_create_list_rotate_revoke_keys(client: httpx.Client):
     assert rotate_payload["raw_key"]
     assert rotate_payload["name"] == "service-a-rotated"
 
-    revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke/",
+    deactivate_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}/",
+        json={"is_active": False},
         headers=headers,
     )
-    assert revoke_response.status_code == 200
-    revoke_payload = revoke_response.json()
-    assert revoke_payload["revoked_at"] is not None
+    assert deactivate_response.status_code == 200
+    deactivate_payload = deactivate_response.json()
+    assert deactivate_payload["is_active"] is False
+    assert deactivate_payload["revoked_at"] is not None
+
+    activate_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}/",
+        json={"is_active": True},
+        headers=headers,
+    )
+    assert activate_response.status_code == 200
+    activate_payload = activate_response.json()
+    assert activate_payload["is_active"] is True
+    assert activate_payload["revoked_at"] is None
+
+    delete_response = client.delete(
+        f"/api/v1/admin/keys/{key_id}/",
+        headers=headers,
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["ok"] is True
+
+    post_delete_list = client.get(
+        "/api/v1/admin/keys/",
+        headers=headers,
+    )
+    assert post_delete_list.status_code == 200
+    assert all(item["id"] != key_id for item in post_delete_list.json())
 
 
 def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
@@ -83,11 +109,12 @@ def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
     )
     assert rotate_response.status_code == 200
 
-    revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke/",
+    deactivate_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}/",
+        json={"is_active": False},
         headers=headers,
     )
-    assert revoke_response.status_code == 200
+    assert deactivate_response.status_code == 200
 
     db = SessionLocal()
     try:
@@ -100,10 +127,10 @@ def test_api_key_audit_logs_capture_admin_username(client: httpx.Client):
         db.close()
 
     actions = {log.action for log in logs}
-    assert actions == {"create", "update", "rotate", "revoke"}
+    assert actions == {"create", "update", "rotate"}
     assert len(logs) == 4
     assert all(log.performed_by_username == "admin" for log in logs)
-    update_log = next(log for log in logs if log.action == "update")
+    update_log = next(log for log in logs if log.action == "update" and "new_name" in (log.metadata_json or {}))
     assert update_log.metadata_json["old_name"] == "audit-service"
     assert update_log.metadata_json["new_name"] == "audit-service-updated"
     assert update_log.metadata_json["old_rate_limit_per_day"] == 75
@@ -182,6 +209,12 @@ def test_admin_key_invalid_uuid_returns_404(client: httpx.Client):
     )
     assert revoke_response.status_code == 404
 
+    delete_response = client.delete(
+        "/api/v1/admin/keys/not-a-uuid/",
+        headers=headers,
+    )
+    assert delete_response.status_code == 404
+
     scans_response = client.get(
         "/api/v1/admin/keys/not-a-uuid/scans/",
         headers=headers,
@@ -202,11 +235,12 @@ def test_revoked_key_rejected_for_ui_requests(client: httpx.Client):
     key_id = payload["id"]
     raw_key = payload["raw_key"]
 
-    revoke_response = client.post(
-        f"/api/v1/admin/keys/{key_id}/revoke/",
+    deactivate_response = client.patch(
+        f"/api/v1/admin/keys/{key_id}/",
+        json={"is_active": False},
         headers=headers,
     )
-    assert revoke_response.status_code == 200
+    assert deactivate_response.status_code == 200
 
     response = client.get(
         "/api/v1/ui/jobs/recent/",
