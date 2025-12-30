@@ -1,7 +1,9 @@
+from uuid import uuid4
+
 import httpx
 
 from app.core.security import hash_password
-from app.db.models import AdminUser
+from app.db.models import AdminUser, ApiKeyAuditLog
 from app.db.session import SessionLocal
 
 
@@ -80,6 +82,69 @@ def test_superadmin_cannot_deactivate_self(client: httpx.Client):
         f"/api/v1/admin/users/{my_id}/",
         headers=headers,
         json={"is_active": False},
+    )
+    assert response.status_code == 400
+
+
+def test_superadmin_must_confirm_current_password_for_self_update(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+    me_response = client.get("/api/v1/admin/users/me/", headers=headers)
+    assert me_response.status_code == 200
+    my_id = me_response.json()["id"]
+
+    missing_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret"},
+    )
+    assert missing_response.status_code == 400
+
+    wrong_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret", "current_password": "wrong"},
+    )
+    assert wrong_response.status_code == 400
+
+    ok_response = client.patch(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+        json={"password": "new-secret", "current_password": "admin"},
+    )
+    assert ok_response.status_code == 200
+
+
+def test_superadmin_cannot_delete_self(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+    me_response = client.get("/api/v1/admin/users/me/", headers=headers)
+    assert me_response.status_code == 200
+    my_id = me_response.json()["id"]
+
+    response = client.delete(
+        f"/api/v1/admin/users/{my_id}/",
+        headers=headers,
+    )
+    assert response.status_code == 400
+
+
+def test_delete_admin_with_audit_logs_returns_clear_error(client: httpx.Client):
+    headers = _login_admin(client, "admin", "admin")
+    admin_user = _create_admin("audited", "audited-password", is_superadmin=True)
+
+    with SessionLocal() as db:
+        log = ApiKeyAuditLog(
+            api_key_id=uuid4(),
+            action="create",
+            performed_by_admin_id=admin_user.id,
+            performed_by_username=admin_user.username,
+            metadata_json={"note": "audit"},
+        )
+        db.add(log)
+        db.commit()
+
+    response = client.delete(
+        f"/api/v1/admin/users/{admin_user.id}/",
+        headers=headers,
     )
     assert response.status_code == 400
 
