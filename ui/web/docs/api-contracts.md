@@ -8,18 +8,18 @@
   - `cached`: boolean
   - optional `scanned_at` (ISO timestamp when served from cache)
 
-## GET /api/v1/results/{job_id}
+## GET /api/v1/results/{job_id}/
 - **Response** (`ResultSummary`):
   - `job_id`, `status`, `verdict`, `confidence`, `severity`, `severity_score`, `engine_count`
   - `started_at`, optional `completed_at`, optional `filename`
   - `families`, `primary_family`, `categories`, `signatures`
   - `details`: object keyed by engine name with vendor-specific fields (e.g., `status`, `signature`, `message`, `detected`, `scanned_at`)
 
-## GET /api/v1/ui/jobs/recent
+## GET /api/v1/ui/jobs/recent/
 - **Response** (`RecentJobsResponse`): `{ items: RecentJobItem[], count }` where each `RecentJobItem` has
   `job_id`, `status`, optional `verdict`, optional `severity`, optional `filename`, optional `sha256`, `started_at`, optional `completed_at`.
 
-## GET /api/v1/ui/api-key
+## GET /api/v1/ui/api-key/
 - **Response** (`ApiKeyStatusResponse`):
   - `bypassed` (true when auth is disabled)
   - `name`
@@ -30,11 +30,13 @@
   - `expires_at` (ISO timestamp)
   - `days_remaining`
 
-## GET /api/v1/ui/engines/active
+## GET /api/v1/ui/engines/active/
 - **Response** (`ActiveEnginesResponse`): `{ engines: { engine, timeout?, weight? }[] }`.
 
-## GET /api/v1/health
-- **Response**: `{ status: "ok" }`
+## GET /api/v1/health/
+- **Response**:
+  - `{ status: "ok", checks: { database: "ok", storage: "ok" } }` on readiness success
+  - `{ status: "error", checks: { database: "error" | "ok", storage: "error" | "ok" }, errors: { database?: string, storage?: string } }` when dependencies are unavailable
 
 These shapes are mirrored in `src/lib/api-types.ts` and consumed by `src/lib/api-client.ts`, enabling typed data access
 throughout the UI.

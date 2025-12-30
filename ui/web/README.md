@@ -8,7 +8,7 @@ Next.js + TypeScript UI using Mantine and TanStack Query. Uploads show inline re
 - `NEXT_PUBLIC_UPLOAD_SIZE_LIMIT_MB` (or legacy `NEXT_PUBLIC_UPLOAD_LIMIT_MB`) guards file size for uploads.
 - `NEXT_PUBLIC_POLL_INTERVAL_MS` and `NEXT_PUBLIC_POLL_TIMEOUT_MS` control the job polling cadence.
 - The history page is backed by server data; client-side upload caching is disabled.
-- The UI waits for `/api/v1/health` before rendering routes and uses `/api/v1/ui/api-key` to show quota/expiry metadata.
+- The UI waits for `/api/v1/health/` before rendering routes and uses `/api/v1/ui/api-key/` to show quota/expiry metadata.
 
 ## Scripts
 - `npm run dev` – start dev server
