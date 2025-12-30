@@ -18,6 +18,26 @@ PERSISTENCE_RETRIES = 3
 PERSISTENCE_RETRY_DELAY = 2
 
 
+def _normalize_task_status(payload: object, fallback: str) -> str:
+    if not isinstance(payload, dict):
+        return fallback
+
+    status = payload.get("status")
+    if isinstance(status, str):
+        normalized = status.lower().strip()
+        if normalized in {"error", "failed", "failure"}:
+            return "error"
+        if normalized in {"timeout", "timed_out"}:
+            return "timeout"
+        if normalized in {"ok", "success"}:
+            return "success"
+
+    if payload.get("error"):
+        return "error"
+
+    return fallback
+
+
 @celery.task(bind=True)
 def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout: int) -> dict:
     """Execute a single AV engine in isolation and persist its result."""
@@ -46,6 +66,7 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
             payload = runner(local_path)
         finally:
             cleanup()
+        status = _normalize_task_status(payload, status)
     except SoftTimeLimitExceeded:
         status = "timeout"
         payload = {
