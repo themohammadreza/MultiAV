@@ -1,5 +1,7 @@
 import clamd
+import logging
 import os
+import socket
 import sys
 import tempfile
 import time
@@ -14,6 +16,9 @@ cd = None
 DEFAULT_ENGINE_NAME = "ClamAV"
 DEFAULT_ENGINE_TYPE = "Antivirus"
 DEFAULT_VERSION = "1.4.3"
+WARM_UP_TIMEOUT_SECONDS = 2.0
+
+logger = logging.getLogger(__name__)
 
 try:
     from app.services.aggregator.normalize import normalize_engine_result
@@ -35,6 +40,34 @@ def _build_client():
         return clamd.ClamdNetworkSocket(host=host, port=port)
 
     return clamd.ClamdUnixSocket(path=socket_path)
+
+
+def warm_up(timeout_seconds: float = WARM_UP_TIMEOUT_SECONDS) -> bool:
+    """Warm up the ClamAV client by pinging the daemon with a short timeout."""
+    host = os.getenv("CLAMAV_HOST", DEFAULT_HOST)
+    socket_path = os.getenv("CLAMAV_SOCKET", DEFAULT_SOCKET)
+    port = int(os.getenv("CLAMAV_PORT", str(DEFAULT_PORT)))
+
+    try:
+        if host:
+            with socket.create_connection((host, port), timeout=timeout_seconds):
+                pass
+        else:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout_seconds)
+            try:
+                sock.connect(socket_path)
+            finally:
+                sock.close()
+
+        client = _build_client()
+        client.ping()
+        global cd
+        cd = client
+        return True
+    except Exception as exc:  # noqa: BLE001 - warm-up should never crash startup
+        logger.warning("ClamAV warm-up failed: %s", exc)
+        return False
 
 
 def get_connection(max_retries: int = 5, delay_seconds: int = 2):

@@ -1,6 +1,7 @@
 import importlib
 import logging
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable, Dict, Optional, TypedDict, Union
 
 from app.services.orchestrator.loader import EngineConfigError, load_engine_config
@@ -16,6 +17,7 @@ class _LazyEngineRunner:
         self.module_path = module_path
         self.attr = attr
         self._runner: Optional[EngineRunner] = None
+        self._module: Optional[ModuleType] = None
 
     def _load(self) -> Optional[EngineRunner]:
         if self._runner:
@@ -27,6 +29,7 @@ class _LazyEngineRunner:
             logger.warning("Engine module %s could not be imported", self.module_path)
             return None
 
+        self._module = module
         self._runner = getattr(module, self.attr, None)
         if not self._runner:
             logger.warning("Engine module %s missing %s callable", self.module_path, self.attr)
@@ -35,7 +38,16 @@ class _LazyEngineRunner:
     def warm_up(self) -> bool:
         """Eagerly import the engine module so expensive setup (e.g. YARA compile) happens at startup."""
         try:
-            return self._load() is not None
+            runner_loaded = self._load() is not None
+            module = self._module
+            warm_up_fn = getattr(module, "warm_up", None) if module else None
+            if callable(warm_up_fn):
+                try:
+                    return bool(warm_up_fn()) and runner_loaded
+                except Exception:  # noqa: BLE001 - warm-up should never crash startup
+                    logger.exception("Failed to warm up engine module %s", self.module_path)
+                    return False
+            return runner_loaded
         except Exception:  # noqa: BLE001 - warm-up should never crash startup
             logger.exception("Failed to warm up engine module %s", self.module_path)
             return False

@@ -1,6 +1,9 @@
-import yara
+import logging
 import time
 from pathlib import Path
+
+import yara
+
 from app.services.aggregator.normalize import (
     SEVERITY_LEVELS,
     normalize_engine_result,
@@ -12,6 +15,7 @@ RULES_DIR = PROJECT_ROOT / "rules" / "yara"
 ENGINE_NAME = "YARA"
 ENGINE_TYPE = "Pattern Matcher"
 ENGINE_VERSION = getattr(yara, "__version__", None)
+logger = logging.getLogger(__name__)
 
 def load_rules():
     if not RULES_DIR.is_dir():
@@ -55,6 +59,20 @@ def load_rules():
     return compiled_sets
 
 rules = load_rules()
+
+
+def warm_up() -> bool:
+    """Ensure YARA rules are loaded to reduce first-scan latency."""
+    global rules
+    if rules:
+        return True
+
+    try:
+        rules = load_rules()
+        return rules is not None
+    except Exception as exc:  # noqa: BLE001 - warm-up should never crash startup
+        logger.warning("YARA warm-up failed: %s", exc)
+        return False
 
 
 def run(file_path: str):

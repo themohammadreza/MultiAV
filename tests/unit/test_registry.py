@@ -1,3 +1,5 @@
+import types
+
 import pytest
 
 from app.services.orchestrator import registry
@@ -159,3 +161,20 @@ def test_warm_up_active_engines_handles_load_failures(monkeypatch):
     warm_up_result = registry.warm_up_active_engines()
 
     assert warm_up_result == {"yara": False}
+
+
+@pytest.mark.unit
+def test_lazy_engine_runner_invokes_module_warm_up(monkeypatch):
+    called = {"count": 0}
+
+    def warm_up():
+        called["count"] += 1
+        return True
+
+    module = types.SimpleNamespace(run=lambda path: {"status": "ok"}, warm_up=warm_up)
+    monkeypatch.setattr(registry.importlib, "import_module", lambda path: module)
+
+    runner = registry._LazyEngineRunner("app.services.engines.fake")
+
+    assert runner.warm_up() is True
+    assert called["count"] == 1
