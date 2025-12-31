@@ -80,7 +80,12 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 
 ### Admin access
 - On startup, a default superadmin is seeded **only if no admin users exist**.
-- Defaults: username `superadmin`, password `mohammad`. Override with `ADMIN_DEFAULT_USERNAME` / `ADMIN_DEFAULT_PASSWORD`.
+- Supply `ADMIN_DEFAULT_USERNAME` and `ADMIN_DEFAULT_PASSWORD` for first-time setup. Startup fails with a clear error if either is missing.
+- In Docker, set them for the `app` (and optionally `worker`) service via a `.env` file or `docker-compose.yml` overrides:
+  ```bash
+  ADMIN_DEFAULT_USERNAME=your-admin
+  ADMIN_DEFAULT_PASSWORD=your-strong-password
+  ```
 - Rotate the superadmin password by logging into the admin UI and updating the account via the **Admin Users** page (superadmins only). For automation, call `PATCH /api/v1/admin/users/{user_id}/` with a new `password`.
 - Admin UI runs at `http://localhost:3001` when `admin-frontend` is enabled in `docker-compose.yml`.
 
