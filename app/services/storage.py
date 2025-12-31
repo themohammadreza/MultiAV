@@ -31,6 +31,10 @@ CHUNK_SIZE = 1024 * 1024
 DELETE_BATCH_SIZE = 1000
 
 
+class StorageLimitError(RuntimeError):
+    """Raised when an upload exceeds the configured storage limits."""
+
+
 class StorageService:
     def __init__(self) -> None:
         self.backend = settings.STORAGE_BACKEND
@@ -106,6 +110,7 @@ class StorageService:
     async def save_file(self, upload: UploadFile) -> Tuple[str, str]:
         temp = NamedTemporaryFile(delete=False)
         sha256 = hashlib.sha256()
+        total_bytes = 0
 
         try:
             while True:
@@ -114,12 +119,18 @@ class StorageService:
                     break
                 sha256.update(chunk)
                 temp.write(chunk)
+                total_bytes += len(chunk)
 
             digest = sha256.hexdigest()
             temp.flush()
             temp.seek(0)
 
             if self.backend == "s3":
+                if total_bytes > self.max_bucket_bytes:
+                    raise StorageLimitError(
+                        "Upload exceeds storage limit "
+                        f"({total_bytes} bytes > {self.max_bucket_bytes} bytes)."
+                    )
                 key = self._object_key(digest)
                 extra_args = {}
                 if upload.content_type:
