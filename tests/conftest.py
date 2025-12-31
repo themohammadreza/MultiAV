@@ -65,7 +65,7 @@ os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 os.environ.setdefault("STORAGE_BACKEND", "local")
 os.environ.setdefault("STORAGE_PATH", _storage_dir)
 os.environ.setdefault("ADMIN_DEFAULT_USERNAME", "admin")
-os.environ.setdefault("ADMIN_DEFAULT_PASSWORD", "admin_password")
+os.environ.setdefault("ADMIN_DEFAULT_PASSWORD", "admin")
 os.environ.setdefault("ADMIN_AUTH_SECRET", "test-admin-auth-secret-32-characters")
 os.environ.setdefault("ADMIN_AUTH_TTL_SECONDS", "3600")
 
