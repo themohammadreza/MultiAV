@@ -20,7 +20,6 @@ from app.db.session import get_db
 
 ADMIN_AUTH_COOKIE_NAME = "admin_session"
 ADMIN_AUTH_TTL_SECONDS = int(os.getenv("ADMIN_AUTH_TTL_SECONDS", "3600"))
-ADMIN_AUTH_SECRET = os.getenv("ADMIN_AUTH_SECRET", "change-me")
 ADMIN_AUTH_COOKIE_SECURE = os.getenv("ADMIN_AUTH_COOKIE_SECURE", "false").strip().lower() in {
     "1",
     "true",
@@ -50,8 +49,21 @@ def _b64decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
+def _get_secret() -> str:
+    secret = os.getenv("ADMIN_AUTH_SECRET")
+    if not secret:
+        raise RuntimeError("ADMIN_AUTH_SECRET must be set to a strong value (32+ characters).")
+    if len(secret) < 32:
+        raise RuntimeError("ADMIN_AUTH_SECRET must be at least 32 characters.")
+    return secret
+
+
+def validate_admin_auth_secret() -> None:
+    _get_secret()
+
+
 def _get_secret_bytes() -> bytes:
-    return ADMIN_AUTH_SECRET.encode("utf-8")
+    return _get_secret().encode("utf-8")
 
 
 def create_admin_token(user: AdminUser) -> tuple[str, datetime]:

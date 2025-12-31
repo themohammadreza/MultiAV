@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import admin_auth, admin_keys, admin_users, health, results, scan, ui
 from app.db.migrations import run_migrations
+from app.core.admin_auth import validate_admin_auth_secret
 from app.core.admin_seed import ensure_default_admin
 from app.services.orchestrator.registry import warm_up_active_engines
 from app.services.storage import get_storage_service
@@ -18,6 +19,12 @@ async def lifespan(app: FastAPI):
     # starting the API
     from app.db import models
     from app.db.session import Base, SessionLocal, engine
+
+    try:
+        validate_admin_auth_secret()
+    except RuntimeError as exc:
+        logger.error("Admin auth secret validation failed: %s", exc)
+        raise
 
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
