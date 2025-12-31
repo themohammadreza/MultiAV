@@ -66,7 +66,7 @@ os.environ.setdefault("STORAGE_BACKEND", "local")
 os.environ.setdefault("STORAGE_PATH", _storage_dir)
 os.environ.setdefault("ADMIN_DEFAULT_USERNAME", "admin")
 os.environ.setdefault("ADMIN_DEFAULT_PASSWORD", "admin")
-os.environ.setdefault("ADMIN_AUTH_SECRET", "test-secret")
+os.environ.setdefault("ADMIN_AUTH_SECRET", "test-secret-32-characters-minimum")
 os.environ.setdefault("ADMIN_AUTH_TTL_SECONDS", "3600")
 
 
