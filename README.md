@@ -48,17 +48,22 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
 - Ports free: 3000 (UI), 3001 (Admin UI), 8000 (API), 3310 (ClamAV), 3993 (Windows Defender), 9000/9001 (MinIO), 55432 (Postgres), 6380 (Redis)
 
 ### Quick start
-1. From the repo root, build and launch everything:
+1. Create a `.env` file with required settings:
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in the values; Docker Compose will fail fast if any required variable is missing.
+2. From the repo root, build and launch everything:
    ```bash
    docker compose up --build
    ```
    This starts Postgres, Redis, ClamAV, Windows Defender, the FastAPI app, and the Celery worker.
-2. Create an API key (required by default):
+3. Create an API key (required by default):
    ```bash
    docker compose exec app python scripts/manage_keys.py create dev 50
    ```
    Copy the printed `API Key: ...` value.
-3. Use the key:
+4. Use the key:
    - UI: open `http://localhost:3000`, click the key icon, paste the key.
    - curl:
      ```bash
@@ -66,7 +71,7 @@ For deeper architecture + contribution guidance, see `CONTRIBUTERS_GUIDE.md`.
      curl -H "X-API-Key: <your-key>" http://localhost:8000/api/v1/results/<job_id>/
      ```
    Or open `http://localhost:8000/docs` for Swagger UI.
-4. Frontend: Next.js UI runs at `http://localhost:3000` with inline results and polling that stops at terminal status.
+5. Frontend: Next.js UI runs at `http://localhost:3000` with inline results and polling that stops at terminal status.
 
 ### Auth & quotas
 - Required headers: `X-API-Key` for `POST /api/v1/scan/` and `GET /api/v1/results/{job_id}/`.
