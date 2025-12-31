@@ -104,13 +104,13 @@ def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response,
     Returns (response, attempts, first_latency_ms).
     """
 
-    start_time = time.time()
+    start_time = time.monotonic()
     deadline = start_time + timeout
     first_latency_ms: Optional[int] = None
     last_exc: Optional[Exception] = None
 
     for attempt in range(1, MAX_CONNECTION_ATTEMPTS + 1):
-        remaining = deadline - time.time()
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise requests.Timeout(f"Windows Defender request exceeded {timeout}s budget before attempt {attempt}")
 
@@ -128,17 +128,17 @@ def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response,
                 )
 
             if first_latency_ms is None:
-                first_latency_ms = int((time.time() - start_time) * 1000)
+                first_latency_ms = int((time.monotonic() - start_time) * 1000)
 
             return response, attempt, first_latency_ms
 
         except (requests.ConnectionError, requests.Timeout) as exc:  # noqa: BLE001 - retry on cold-start refusal/timeout
             last_exc = exc
             if first_latency_ms is None:
-                first_latency_ms = int((time.time() - start_time) * 1000)
+                first_latency_ms = int((time.monotonic() - start_time) * 1000)
 
             if attempt < MAX_CONNECTION_ATTEMPTS:
-                delay = min(RETRY_BACKOFF_SECONDS * attempt, max(deadline - time.time(), 0))
+                delay = min(RETRY_BACKOFF_SECONDS * attempt, max(deadline - time.monotonic(), 0))
                 if delay <= 0:
                     break
                 logger.warning(
@@ -147,7 +147,7 @@ def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response,
                     MAX_CONNECTION_ATTEMPTS,
                     exc,
                     delay,
-                    round(deadline - time.time(), 2),
+                    round(deadline - time.monotonic(), 2),
                 )
                 time.sleep(delay)
                 continue
@@ -164,7 +164,7 @@ def run(file_path: str):
     """
     Scan a file using the malice/windows-defender web service.
     """
-    start_time = time.time()
+    start_time = time.monotonic()
     path = Path(file_path)
     if not path.is_file():
         return normalize_engine_result(
@@ -191,7 +191,7 @@ def run(file_path: str):
     try:
         response, attempts, first_latency_ms = _post_scan(path, url, timeout)
     except requests.RequestException as exc:  # noqa: BLE001 - network/connection errors should be reported
-        duration_ms = int((time.time() - start_time) * 1000)
+        duration_ms = int((time.monotonic() - start_time) * 1000)
         logger.error(
             "Windows Defender request failed after %sms (attempts=%s): %s",
             duration_ms,
@@ -220,7 +220,7 @@ def run(file_path: str):
             },
         )
 
-    duration_ms = int((time.time() - start_time) * 1000)
+    duration_ms = int((time.monotonic() - start_time) * 1000)
     logger.info(
         "Windows Defender first-request latency %sms over %s attempt(s); total duration %sms (timeout=%ss)",
         first_latency_ms,
