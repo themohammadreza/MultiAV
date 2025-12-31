@@ -17,5 +17,6 @@ export STORAGE_S3_REGION="us-east-1"
 export STORAGE_S3_ACCESS_KEY="minio_username"
 export STORAGE_S3_SECRET_KEY="minio_password"
 export STORAGE_S3_USE_SSL="false"
+export ADMIN_AUTH_SECRET="replace-with-32-plus-character-secret" # e.g. `openssl rand -hex 32`
 
 echo "Environment variables set for MultiAV (targets services exposed on localhost)."
