@@ -1,9 +1,10 @@
+import hashlib
 from uuid import uuid4
 
 import httpx
 
 from app.core.security import hash_password
-from app.db.models import AdminUser, ApiKeyAuditLog
+from app.db.models import AdminUser, APIKey, ApiKeyAuditLog
 from app.db.session import SessionLocal
 
 
@@ -132,8 +133,15 @@ def test_delete_admin_with_audit_logs_returns_clear_error(client: httpx.Client):
     admin_user = _create_admin("audited", "audited-password", is_superadmin=True)
 
     with SessionLocal() as db:
+        api_key = APIKey(
+            key_hash=hashlib.sha256(b"audit-key").hexdigest(),
+            name="audit-key",
+            rate_limit_per_day=10,
+        )
+        db.add(api_key)
+        db.flush()
         log = ApiKeyAuditLog(
-            api_key_id=uuid4(),
+            api_key_id=api_key.id,
             action="create",
             performed_by_admin_id=admin_user.id,
             performed_by_username=admin_user.username,
