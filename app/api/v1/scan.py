@@ -6,7 +6,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 import pytz
 
-from app.services.storage import compute_sha256, save_file
+from app.services.storage import StorageLimitError, compute_sha256, save_file
 from app.db.session import get_db
 from app.db.models import APIKey as APIKeyModel, ApiKeyUsage, File as FileModel, ScanJob
 from app.workers.tasks import run_scan
@@ -61,7 +61,10 @@ async def upload_file(
                 }
 
     check_rate_limit(api_key, redis_client)
-    _, location = await save_file(file)
+    try:
+        _, location = await save_file(file)
+    except StorageLimitError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
 
     # if it's a new file
     if not file_entry:

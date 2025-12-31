@@ -5,6 +5,7 @@ import hashlib
 import io
 
 import pytest
+import anyio
 from starlette.datastructures import UploadFile
 
 botocore_exceptions = pytest.importorskip("botocore.exceptions")
@@ -19,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.models import File, Base
 from app.services import storage
-from app.services.storage import StorageService
+from app.services.storage import StorageLimitError, StorageService
 
 
 @pytest.fixture(autouse=True)
@@ -192,3 +193,39 @@ def test_migrate_local_files_uploads_and_cleans(tmp_path):
 
     assert not file_path.exists()
     monkeypatch.undo()
+
+
+@mock_s3
+def test_save_file_rejects_uploads_exceeding_s3_limit(monkeypatch):
+    bucket = "limit-bucket"
+    region = "us-west-2"
+    monkeypatch.setattr(storage.settings, "STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_BUCKET", bucket)
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_REGION", region)
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_ACCESS_KEY", "x")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_SECRET_KEY", "y")
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_ENDPOINT", None)
+    monkeypatch.setattr(storage.settings, "STORAGE_S3_USE_SSL", False)
+    monkeypatch.setattr(storage.settings, "STORAGE_MAX_BYTES", 3)
+
+    s3 = boto3.client("s3", region_name=region)
+    s3.create_bucket(
+        Bucket=bucket,
+        CreateBucketConfiguration={"LocationConstraint": region},
+    )
+
+    upload = UploadFile(
+        filename="big.bin",
+        file=io.BytesIO(b"toolarge"),
+    )
+
+    service = StorageService()
+
+    async def run_save():
+        with pytest.raises(StorageLimitError, match="exceeds storage limit"):
+            await service.save_file(upload)
+
+    anyio.run(run_save)
+
+    objects = s3.list_objects_v2(Bucket=bucket)
+    assert objects.get("Contents", []) == []
