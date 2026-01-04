@@ -17,7 +17,6 @@ from tests.utils import (
 def test_windows_defender_cold_start_persists_results(monkeypatch, celery_worker_instance):
     attempts: dict[str, int | float] = {"count": 0}
     monkeypatch.setenv("WINDEFENDER_TIMEOUT", "5")  # Ensure low budgets are respected
-    monkeypatch.setattr(win_engine, "RETRY_BACKOFF_SECONDS", 0.01)
     monkeypatch.setattr(win_engine, "MAX_CONNECTION_ATTEMPTS", 2)
 
     class FakeResponse:

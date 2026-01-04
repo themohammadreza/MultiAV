@@ -6,6 +6,7 @@ from celery import chord
 from celery.exceptions import SoftTimeLimitExceeded
 
 from app.workers.celery_app import celery
+from app.services.engines.exceptions import ConnectionRetry
 from app.services.orchestrator import dispatcher
 from app.services.orchestrator.registry import DEFAULT_ENGINE_TIMEOUT, get_active_engines
 from app.services.storage import get_storage_service
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 TIME_LIMIT_GRACE_SECONDS = 5
 PERSISTENCE_RETRIES = 3
 PERSISTENCE_RETRY_DELAY = 2
+CONNECTION_RETRY_BASE_SECONDS = 2
+CONNECTION_RETRY_MAX_SECONDS = 30
+CONNECTION_RETRY_MAX_ATTEMPTS = 3
 
 
 def _normalize_task_status(payload: object, fallback: str) -> str:
@@ -67,6 +71,23 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
         finally:
             cleanup()
         status = _normalize_task_status(payload, status)
+    except ConnectionRetry as exc:
+        current_retries = getattr(self.request, "retries", 0) or 0
+        countdown = min(CONNECTION_RETRY_BASE_SECONDS * (2 ** current_retries), CONNECTION_RETRY_MAX_SECONDS)
+        logger.warning(
+            "Job %s engine %s connection retry scheduled (attempt %s/%s in %ss): %s",
+            job_id,
+            engine_name,
+            current_retries + 1,
+            CONNECTION_RETRY_MAX_ATTEMPTS,
+            countdown,
+            exc,
+        )
+        raise self.retry(
+            exc=exc,
+            countdown=countdown,
+            max_retries=CONNECTION_RETRY_MAX_ATTEMPTS,
+        )
     except SoftTimeLimitExceeded:
         status = "timeout"
         payload = {
