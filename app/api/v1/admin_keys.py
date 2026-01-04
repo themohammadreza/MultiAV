@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import AdminSession, get_admin_session
-from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage, ScanJob
+from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage, File, ScanJob
 from app.db.session import get_db
 
 
@@ -47,6 +47,7 @@ class ApiKeyResponse(BaseModel):
 
 class ApiKeyScanItem(BaseModel):
     job_id: str
+    filename: str | None = None
     status: str
     verdict: str | None = None
     created_at: datetime
@@ -339,7 +340,11 @@ def list_key_scans(
     total = base_query.count()
 
     scans = (
-        base_query.order_by(ApiKeyUsage.created_at.desc())
+        db.query(ApiKeyUsage, File.filename)
+        .outerjoin(ScanJob, ApiKeyUsage.job_id == ScanJob.id)
+        .outerjoin(File, ScanJob.file_id == File.id)
+        .filter(ApiKeyUsage.api_key_id == key.id)
+        .order_by(ApiKeyUsage.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -348,11 +353,12 @@ def list_key_scans(
     items = [
         ApiKeyScanItem(
             job_id=str(scan.job_id),
+            filename=filename,
             status=scan.status,
             verdict=scan.verdict,
             created_at=scan.created_at,
         )
-        for scan in scans
+        for scan, filename in scans
     ]
     return ApiKeyScansResponse(items=items, count=len(items), total=total)
 

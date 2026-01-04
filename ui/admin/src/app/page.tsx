@@ -507,7 +507,7 @@ export default function AdminKeysPage() {
       <Card withBorder>
         <Stack gap="md">
           <Group justify="space-between">
-            <Title order={4}>Recent scans</Title>
+            <Title order={4}>Recent Scans</Title>
             {selectedKey ? <Badge>{selectedKey.name}</Badge> : <Badge color="gray">Select a key</Badge>}
           </Group>
           <Text size="sm" c="dimmed">
@@ -531,6 +531,7 @@ export default function AdminKeysPage() {
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Job ID</Table.Th>
+                    <Table.Th>File Name</Table.Th>
                     <Table.Th>Status</Table.Th>
                     <Table.Th>Verdict</Table.Th>
                     <Table.Th>Queued at</Table.Th>
@@ -540,6 +541,7 @@ export default function AdminKeysPage() {
                   {(scansQuery.data?.items ?? []).map((scan) => (
                     <Table.Tr key={scan.job_id}>
                       <Table.Td>{scan.job_id}</Table.Td>
+                      <Table.Td>{scan.filename || '—'}</Table.Td>
                       <Table.Td>{toTitleCase(scan.status)}</Table.Td>
                       <Table.Td>{scan.verdict ? toTitleCase(scan.verdict) : '—'}</Table.Td>
                       <Table.Td>{formatDate(scan.created_at)}</Table.Td>
