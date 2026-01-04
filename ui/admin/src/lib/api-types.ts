@@ -25,6 +25,7 @@ export interface AdminApiKey {
 
 export interface AdminKeyScanItem {
   job_id: string;
+  filename?: string | null;
   status: string;
   verdict?: string | null;
   created_at: string;

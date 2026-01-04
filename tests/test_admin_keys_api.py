@@ -191,6 +191,7 @@ def test_list_key_scans(client: httpx.Client):
     assert payload["total"] == 1
     assert payload["count"] == 1
     assert payload["items"][0]["job_id"] == str(job_id)
+    assert payload["items"][0]["filename"] == "sample.bin"
 
 
 def test_admin_key_invalid_uuid_returns_404(client: httpx.Client):
