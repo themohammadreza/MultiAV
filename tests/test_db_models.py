@@ -207,3 +207,70 @@ def test_run_migrations_creates_api_key_audit_logs_table():
 
     inspector = inspect(engine)
     assert "api_key_audit_logs" in inspector.get_table_names()
+
+
+@pytest.mark.unit
+def test_run_migrations_adds_performance_indexes():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE scan_jobs ("
+                "id TEXT PRIMARY KEY, "
+                "api_key_id TEXT, "
+                "status TEXT, "
+                "created_at TIMESTAMP"
+                ")"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TABLE files ("
+                "id TEXT PRIMARY KEY, "
+                "sha256 TEXT, "
+                "path TEXT, "
+                "uploaded_at TIMESTAMP"
+                ")"
+            )
+        )
+        conn.execute(text("CREATE INDEX ix_files_sha256 ON files (sha256)"))
+        conn.execute(
+            text(
+                "CREATE TABLE engine_results ("
+                "id TEXT PRIMARY KEY, "
+                "job_id TEXT, "
+                "engine TEXT, "
+                "scanned_at TIMESTAMP"
+                ")"
+            )
+        )
+
+    run_migrations(engine)
+
+    inspector = inspect(engine)
+    assert any(
+        index.get("column_names") == ["created_at"]
+        for index in inspector.get_indexes("scan_jobs")
+    )
+    assert any(
+        index.get("column_names") == ["api_key_id", "status"]
+        for index in inspector.get_indexes("scan_jobs")
+    )
+    assert any(
+        index.get("column_names") == ["created_at"]
+        for index in inspector.get_indexes("api_key_usages")
+    )
+    assert any(
+        index.get("column_names") == ["api_key_id", "created_at"]
+        for index in inspector.get_indexes("api_key_usages")
+    )
+    assert any(
+        index.get("column_names") == ["job_id", "scanned_at"]
+        for index in inspector.get_indexes("engine_results")
+    )
+    file_indexes = [
+        index
+        for index in inspector.get_indexes("files")
+        if "sha256" in (index.get("column_names") or [])
+    ]
+    assert len(file_indexes) == 1
