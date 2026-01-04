@@ -52,7 +52,9 @@ def _b64decode(data: str) -> bytes:
 def _get_secret() -> str:
     secret = os.getenv("ADMIN_AUTH_SECRET")
     if not secret:
-        raise RuntimeError("ADMIN_AUTH_SECRET must be set to a strong value (32+ characters).")
+        raise RuntimeError(
+            "ADMIN_AUTH_SECRET must be set to a strong value (32+ characters). Generate with: openssl rand -hex 32"
+        )
     if len(secret) < 32:
         raise RuntimeError("ADMIN_AUTH_SECRET must be at least 32 characters.")
     return secret
