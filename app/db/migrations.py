@@ -39,6 +39,53 @@ def run_migrations(engine: Engine) -> None:
     if "api_key_audit_logs" not in table_names:
         _create_api_key_audit_logs_table(engine)
 
+    _add_performance_indexes(engine, inspect(engine))
+
+
+def _add_performance_indexes(engine: Engine, inspector) -> None:
+    """Create performance-oriented indexes if they are missing."""
+    dialect = engine.dialect.name
+    if dialect not in {"postgresql", "sqlite"}:
+        return
+
+    table_names = set(inspector.get_table_names())
+    index_specs: list[tuple[str, str, list[str]]] = [
+        ("scan_jobs", "ix_scan_jobs_created_at", ["created_at"]),
+        ("scan_jobs", "ix_scan_jobs_api_key_status", ["api_key_id", "status"]),
+        ("api_key_usages", "ix_api_key_usages_created_at", ["created_at"]),
+        ("api_key_usages", "ix_api_key_usages_api_key_created_at", ["api_key_id", "created_at"]),
+        ("engine_results", "ix_engine_results_job_scanned_at", ["job_id", "scanned_at"]),
+    ]
+
+    if "files" in table_names:
+        index_specs.append(("files", "ix_files_sha256", ["sha256"]))
+
+    with engine.begin() as conn:
+        for table, index_name, columns in index_specs:
+            if table not in table_names:
+                continue
+
+            table_columns = {col["name"] for col in inspector.get_columns(table)}
+            if any(column not in table_columns for column in columns):
+                continue
+
+            existing_indexes = inspector.get_indexes(table)
+            existing_columns = [index.get("column_names") or [] for index in existing_indexes]
+
+            if table == "files" and "sha256" in columns:
+                if any("sha256" in index_columns for index_columns in existing_columns):
+                    continue
+            else:
+                if any(index_columns == columns for index_columns in existing_columns):
+                    continue
+
+            conn.execute(
+                text(
+                    f"CREATE INDEX IF NOT EXISTS {index_name} "
+                    f"ON {table} ({', '.join(columns)})"
+                )
+            )
+
 
 def _add_scan_jobs_api_key_id(engine: Engine, inspector) -> None:
     """Backfill the api_key_id column on scan_jobs if missing."""
