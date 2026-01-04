@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.admin_auth import AdminSession, get_admin_session
 from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage, File, ScanJob
@@ -336,7 +336,11 @@ def list_key_scans(
     offset: int = Query(0, ge=0),
 ):
     key = _get_key_or_404(db, key_id)
-    base_query = db.query(ApiKeyUsage).filter(ApiKeyUsage.api_key_id == key.id)
+    base_query = (
+        db.query(ApiKeyUsage)
+        .filter(ApiKeyUsage.api_key_id == key.id)
+        .options(joinedload(ApiKeyUsage.job).joinedload(ScanJob.file))
+    )
     total = base_query.count()
 
     scans = (
