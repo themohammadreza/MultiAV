@@ -20,6 +20,12 @@ class Settings:
 
     BYPASS_AUTH: bool = os.getenv("BYPASS_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
 
+    def __post_init__(self):
+        # prevent bypass in prod
+        
+        if self.BYPASS_AUTH and os.getenv("ENV", "dev") == "production":
+            raise RuntimeError("BYPASS_AUTH cannot be enabled in production")
+
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://multiav_user:mohammad@localhost:5432/multiav_db"
