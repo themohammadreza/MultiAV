@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.admin_auth import AdminSession, get_admin_session
 from app.db.models import APIKey as APIKeyModel, ApiKeyAuditLog, ApiKeyUsage, ScanJob
@@ -47,6 +47,7 @@ class ApiKeyResponse(BaseModel):
 
 class ApiKeyScanItem(BaseModel):
     job_id: str
+    filename: str | None = None
     status: str
     verdict: str | None = None
     created_at: datetime
@@ -335,7 +336,11 @@ def list_key_scans(
     offset: int = Query(0, ge=0),
 ):
     key = _get_key_or_404(db, key_id)
-    base_query = db.query(ApiKeyUsage).filter(ApiKeyUsage.api_key_id == key.id)
+    base_query = (
+        db.query(ApiKeyUsage)
+        .filter(ApiKeyUsage.api_key_id == key.id)
+        .options(joinedload(ApiKeyUsage.job).joinedload(ScanJob.file))
+    )
     total = base_query.count()
 
     scans = (
@@ -348,6 +353,7 @@ def list_key_scans(
     items = [
         ApiKeyScanItem(
             job_id=str(scan.job_id),
+            filename=scan.job.file.filename if scan.job and scan.job.file else None,
             status=scan.status,
             verdict=scan.verdict,
             created_at=scan.created_at,
