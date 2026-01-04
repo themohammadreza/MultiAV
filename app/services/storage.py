@@ -42,6 +42,7 @@ class StorageService:
         self.object_ttl_seconds = settings.STORAGE_TTL_SECONDS
         self.max_bucket_bytes = settings.STORAGE_MAX_BYTES
         self._cleanup_timer: Optional[threading.Timer] = None
+        self._cleanup_lock = threading.Lock()
 
         if self.backend == "s3":
             if boto3 is None:
@@ -314,21 +315,23 @@ class StorageService:
         """Best-effort background cleanup after TTL passes, even if no new uploads arrive."""
         if self.backend != "s3":
             return
-        if self._cleanup_timer:
+
+        with self._cleanup_lock:
+            if self._cleanup_timer:
+                try:
+                    if self._cleanup_timer.is_alive():
+                        self._cleanup_timer.cancel()
+                except Exception as exc: # noqa: BLE001 cancellation shouldn't block scheduling
+                    logger.warning("Failed to cancel existing cleanup timer: %s", exc)
+                finally:
+                    self._cleanup_timer = None
             try:
-                if self._cleanup_timer.is_alive():
-                    self._cleanup_timer.cancel()
-            except Exception as exc:  # noqa: BLE001 - cancellation should not block scheduling
-                logger.warning("Failed to cancel existing cleanup timer: %s", exc)
-            finally:
-                self._cleanup_timer = None
-        try:
-            timer = threading.Timer(self.object_ttl_seconds, self._cleanup_bucket)
-            timer.daemon = True
-            timer.start()
-            self._cleanup_timer = timer
-        except Exception as exc:  # noqa: BLE001 - do not fail uploads on scheduler issues
-            logger.warning("Failed to schedule TTL cleanup: %s", exc)
+                timer = threading.Timer(self.object_ttl_seconds, self._cleanup_bucket)
+                timer.daemon = True
+                timer.start()
+                self._cleanup_timer = timer
+            except Exception as exc:
+                logger.warning("Failed to schedule TTL cleanup: %s", exc)
 
 
 _storage_service: Optional[StorageService] = None
