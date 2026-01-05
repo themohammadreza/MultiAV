@@ -3,7 +3,7 @@ import time
 from typing import List
 
 from celery import chord
-from celery.exceptions import SoftTimeLimitExceeded
+from celery.exceptions import MaxRetriesExceededError, SoftTimeLimitExceeded
 
 from app.workers.celery_app import celery
 from app.services.engines.exceptions import ConnectionRetry
@@ -83,11 +83,26 @@ def run_engine_task(self, job_id: str, file_path: str, engine_name: str, timeout
             countdown,
             exc,
         )
-        raise self.retry(
-            exc=exc,
-            countdown=countdown,
-            max_retries=CONNECTION_RETRY_MAX_ATTEMPTS,
-        )
+        try:
+            raise self.retry(
+                exc=exc,
+                countdown=countdown,
+                max_retries=CONNECTION_RETRY_MAX_ATTEMPTS,
+            )
+        except MaxRetriesExceededError:
+            status = "error"
+            payload = {
+                "error": str(exc),
+                "retry_exhausted": True,
+                "retry_attempts": current_retries,
+            }
+            logger.error(
+                "Job %s engine %s connection retries exhausted after %s attempt(s): %s",
+                job_id,
+                engine_name,
+                current_retries,
+                exc,
+            )
     except SoftTimeLimitExceeded:
         status = "timeout"
         payload = {

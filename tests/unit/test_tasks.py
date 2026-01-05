@@ -1,5 +1,7 @@
 import pytest
 
+from celery.exceptions import MaxRetriesExceededError
+
 from app.services.engines.exceptions import ConnectionRetry
 from app.workers import tasks
 
@@ -130,5 +132,51 @@ def test_run_engine_task_retries_on_connection_retry(monkeypatch, tmp_path):
         )
 
     assert calls["recorded"] is False
+    assert calls["countdown"] == tasks.CONNECTION_RETRY_BASE_SECONDS
+    assert calls["max_retries"] == tasks.CONNECTION_RETRY_MAX_ATTEMPTS
+
+
+@pytest.mark.unit
+def test_run_engine_task_persists_when_retries_exhausted(monkeypatch, tmp_path):
+    provided_path = tmp_path / "sample.bin"
+    provided_path.write_bytes(b"binary")
+
+    calls: dict[str, object] = {"status": None, "payload": None, "countdown": None, "max_retries": None}
+
+    def fake_runner(path: str):
+        raise ConnectionRetry("ClamAV", "connection refused", attempts=1)
+
+    class FakeStorage:
+        def ensure_local_copy(self, location):
+            return location, lambda: None
+
+    def fake_record_engine_result(job_id, engine_name, status, payload):  # noqa: ARG001
+        calls["status"] = status
+        calls["payload"] = payload
+        return True
+
+    def fake_retry(*, exc, countdown, max_retries):  # noqa: ARG001
+        calls["countdown"] = countdown
+        calls["max_retries"] = max_retries
+        raise MaxRetriesExceededError()
+
+    monkeypatch.setattr(
+        tasks, "get_active_engines", lambda: {"clamav": {"runner": fake_runner, "timeout": 5, "weight": 0.5}}
+    )
+    monkeypatch.setattr(tasks, "get_storage_service", lambda: FakeStorage())
+    monkeypatch.setattr(tasks.dispatcher, "record_engine_result", fake_record_engine_result)
+    monkeypatch.setattr(tasks.dispatcher, "record_dispatch_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(tasks.run_engine_task, "retry", fake_retry)
+
+    result = tasks.run_engine_task.run(
+        job_id="job-123",
+        file_path=str(provided_path),
+        engine_name="clamav",
+        timeout=5,
+    )
+
+    assert result["status"] == "error"
+    assert calls["status"] == "error"
+    assert calls["payload"]["retry_exhausted"] is True
     assert calls["countdown"] == tasks.CONNECTION_RETRY_BASE_SECONDS
     assert calls["max_retries"] == tasks.CONNECTION_RETRY_MAX_ATTEMPTS
