@@ -199,8 +199,34 @@ def run(file_path: str):
 
     try:
         response, attempts, first_latency_ms = _post_scan(path, url, timeout)
-    except ConnectionRetry:
-        raise
+    except ConnectionRetry as exc:
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        logger.error(
+            "Windows Defender connection failed after %sms (attempts=%s): %s",
+            duration_ms,
+            exc.attempts or MAX_CONNECTION_ATTEMPTS,
+            exc,
+        )
+        return normalize_engine_result(
+            engine=ENGINE_NAME,
+            engine_type=ENGINE_TYPE,
+            engine_version=None,
+            status="error",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="informational",
+            confidence=0.0,
+            duration_ms=duration_ms,
+            error=str(exc),
+            details={
+                "scan_time_ms": duration_ms,
+                "url": url,
+                "request_attempts": exc.attempts or MAX_CONNECTION_ATTEMPTS,
+                "timeout_seconds": timeout,
+            },
+        )
     except requests.RequestException as exc:  # noqa: BLE001 - network/connection errors should be reported
         duration_ms = int((time.monotonic() - start_time) * 1000)
         logger.error(

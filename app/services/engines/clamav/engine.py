@@ -223,16 +223,8 @@ def run(file_path: str):
         with open(FILE_PATH, 'rb') as f:
             response = client.instream(f)
         return _parse_response(response, start_time)
-    except ConnectionRetry:
-        raise
-    except clamd.ConnectionError as exc:
-        raise ConnectionRetry(
-            DEFAULT_ENGINE_NAME,
-            f"ClamAV connection error: {exc}",
-            attempts=1,
-            last_exc=exc,
-        ) from exc
-    except Exception as e:
+    except ConnectionRetry as exc:
+        scan_time_ms = int((time.time() - start_time) * 1000)
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,
             engine_type=DEFAULT_ENGINE_TYPE,
@@ -244,11 +236,51 @@ def run(file_path: str):
             category=None,
             severity="informational",
             confidence=0.0,
-            duration_ms=int((time.time() - start_time) * 1000),
+            duration_ms=scan_time_ms,
+            error=str(exc),
+            details={
+                "version": DEFAULT_VERSION,
+                "scan_time_ms": scan_time_ms,
+            },
+        )
+    except clamd.ConnectionError as exc:
+        scan_time_ms = int((time.time() - start_time) * 1000)
+        return normalize_engine_result(
+            engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="error",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="informational",
+            confidence=0.0,
+            duration_ms=scan_time_ms,
+            error=f"ClamAV connection error: {exc}",
+            details={
+                "version": DEFAULT_VERSION,
+                "scan_time_ms": scan_time_ms,
+            },
+        )
+    except Exception as e:
+        scan_time_ms = int((time.time() - start_time) * 1000)
+        return normalize_engine_result(
+            engine=DEFAULT_ENGINE_NAME,
+            engine_type=DEFAULT_ENGINE_TYPE,
+            engine_version=DEFAULT_VERSION,
+            status="error",
+            detected=False,
+            signature=None,
+            malware_family=None,
+            category=None,
+            severity="informational",
+            confidence=0.0,
+            duration_ms=scan_time_ms,
             error=str(e),
             details={
                 "version": DEFAULT_VERSION,
-                "scan_time_ms": int((time.time() - start_time) * 1000),
+                "scan_time_ms": scan_time_ms
             },
         )
 

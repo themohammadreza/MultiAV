@@ -34,3 +34,21 @@ def test_run_handles_missing_file(tmp_path):
 
     assert result["status"] == "error"
     assert "File not found" in result.get("error", "")
+
+@pytest.mark.unit
+def test_run_returns_error_on_connection_retry(monkeypatch, tmp_path):
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(b"payload")
+
+    def fake_post_scan(path, url, timeout):  # noqa: ARG001
+        raise engine.ConnectionRetry(engine.ENGINE_NAME, "service unavailable", attempts=1)
+
+    monkeypatch.setattr(engine, "_post_scan", fake_post_scan)
+    monkeypatch.setattr(engine, "_build_url", lambda: "http://windows-defender:3993/scan")
+    monkeypatch.setattr(engine, "_get_timeout_seconds", lambda: 1.0)
+
+    result = engine.run(str(sample))
+
+    assert result["status"] == "error"
+    assert "service unavailable" in result.get("error", "")
+    assert result["details"]["request_attempts"] == 1
