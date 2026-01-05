@@ -92,7 +92,7 @@ def test_run_scan_prefers_local_file_path_when_available(monkeypatch, tmp_path):
 
 
 @pytest.mark.unit
-def test_run_engine_task_records_connection_retry(monkeypatch, tmp_path)
+def test_run_engine_task_records_connection_retry(monkeypatch, tmp_path):
     provided_path = tmp_path / "sample.bin"
     provided_path.write_bytes(b"binary")
 
