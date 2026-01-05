@@ -2,10 +2,11 @@ import clamd
 import logging
 import os
 import socket
-import sys
 import tempfile
 import time
 from pathlib import Path
+
+from app.services.engines.exceptions import ConnectionRetry
 
 # Prefer TCP host:port when set (for container-to-container connections), otherwise fallback to local socket.
 DEFAULT_SOCKET = os.getenv("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl")
@@ -70,7 +71,7 @@ def warm_up(timeout_seconds: float = WARM_UP_TIMEOUT_SECONDS) -> bool:
         return False
 
 
-def get_connection(max_retries: int = 5, delay_seconds: int = 2):
+def get_connection(max_retries: int = 5):
     """Get clamd connection with retry logic."""
     global cd
     last_exc = None
@@ -86,12 +87,26 @@ def get_connection(max_retries: int = 5, delay_seconds: int = 2):
             last_exc = exc
             cd = None
             if attempt < max_retries - 1:
-                print(f"[ClamAV] Connection attempt {attempt + 1} failed, retrying...", file=sys.stderr)
-                time.sleep(delay_seconds)
-            else:
-                raise RuntimeError(f"Failed to connect to clamd after {max_retries} attempts: {exc}") from exc
+                logger.warning(
+                    "ClamAV connection attempt %s/%s failed: %s",
+                    attempt + 1,
+                    max_retries,
+                    exc,
+                )
+                continue
+            raise ConnectionRetry(
+                DEFAULT_ENGINE_NAME,
+                f"Failed to connect to clamd after {max_retries} attempts: {exc}",
+                attempts=max_retries,
+                last_exc=exc,
+            ) from exc
 
-    raise RuntimeError(f"Failed to connect to clamd: {last_exc}")
+    raise ConnectionRetry(
+        DEFAULT_ENGINE_NAME,
+        f"Failed to connect to clamd: {last_exc}",
+        attempts=max_retries,
+        last_exc=last_exc,
+    )
 
 
 def _is_safe_path(file_path: Path) -> bool:
@@ -208,34 +223,15 @@ def run(file_path: str):
         with open(FILE_PATH, 'rb') as f:
             response = client.instream(f)
         return _parse_response(response, start_time)
-
-    except clamd.ConnectionError as e:
-        # Attempt one reconnect in case the daemon restarted between scans
-        try:
-            client = get_connection()
-            with open(FILE_PATH, 'rb') as f:
-                response = client.instream(f)
-            return _parse_response(response, start_time)
-        except Exception as reconnection_exc:  # noqa: BLE001
-            return normalize_engine_result(
-                engine=DEFAULT_ENGINE_NAME,
-                engine_type=DEFAULT_ENGINE_TYPE,
-                engine_version=DEFAULT_VERSION,
-                status="error",
-                detected=False,
-                signature=None,
-                malware_family=None,
-                category=None,
-                severity="informational",
-                confidence=0.0,
-                duration_ms=int((time.time() - start_time) * 1000),
-                error=f"Connection error: {str(e)}; reconnection attempt failed: {reconnection_exc}",
-                details={
-                    "version": DEFAULT_VERSION,
-                    "scan_time_ms": int((time.time() - start_time) * 1000),
-                },
-            )
-
+    except ConnectionRetry:
+        raise
+    except clamd.ConnectionError as exc:
+        raise ConnectionRetry(
+            DEFAULT_ENGINE_NAME,
+            f"ClamAV connection error: {exc}",
+            attempts=1,
+            last_exc=exc,
+        ) from exc
     except Exception as e:
         return normalize_engine_result(
             engine=DEFAULT_ENGINE_NAME,

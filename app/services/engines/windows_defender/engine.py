@@ -6,8 +6,9 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-logger = logging.getLogger(__name__)
+from app.services.engines.exceptions import ConnectionRetry
 
+logger = logging.getLogger(__name__)
 try:
     from app.services.aggregator.normalize import normalize_engine_result
 except Exception:
@@ -21,7 +22,6 @@ DEFAULT_PORT = 3993
 DEFAULT_TIMEOUT = 120
 MIN_RECOMMENDED_TIMEOUT_SECONDS = 10.0
 MAX_CONNECTION_ATTEMPTS = 2
-RETRY_BACKOFF_SECONDS = 1.0
 CONNECT_TIMEOUT_SECONDS = 5.0
 WARM_UP_TIMEOUT_SECONDS = 2.0
 
@@ -99,7 +99,7 @@ def _get_timeout_seconds() -> float:
 
 
 def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response, int, Optional[int]]:
-    """POST the file to Windows Defender with retry/backoff and a total timeout budget.
+    """POST the file to Windows Defender with retry and a total timeout budget.
 
     Returns (response, attempts, first_latency_ms).
     """
@@ -112,7 +112,11 @@ def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response,
     for attempt in range(1, MAX_CONNECTION_ATTEMPTS + 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise requests.Timeout(f"Windows Defender request exceeded {timeout}s budget before attempt {attempt}")
+            raise ConnectionRetry(
+                ENGINE_NAME,
+                f"Windows Defender request exceeded {timeout}s budget before attempt {attempt}",
+                attempts=attempt - 1,
+            )
 
         # Apply a tuple timeout so the connect phase does not consume the full budget.
         connect_timeout = min(CONNECT_TIMEOUT_SECONDS, max(remaining, 0.1))
@@ -138,24 +142,29 @@ def _post_scan(path: Path, url: str, timeout: float) -> Tuple[requests.Response,
                 first_latency_ms = int((time.monotonic() - start_time) * 1000)
 
             if attempt < MAX_CONNECTION_ATTEMPTS:
-                delay = min(RETRY_BACKOFF_SECONDS * attempt, max(deadline - time.monotonic(), 0))
-                if delay <= 0:
-                    break
                 logger.warning(
-                    "Windows Defender connection attempt %s/%s failed (%s), retrying in %ss (remaining budget=%ss)",
+                    "Windows Defender connection attempt %s/%s failed (%s), retrying immediately (remaining budget=%ss)",
                     attempt,
                     MAX_CONNECTION_ATTEMPTS,
                     exc,
-                    delay,
                     round(deadline - time.monotonic(), 2),
                 )
-                time.sleep(delay)
                 continue
 
-            raise
+            raise ConnectionRetry(
+                ENGINE_NAME,
+                f"Windows Defender connection failed after {attempt} attempts: {exc}",
+                attempts=attempt,
+                last_exc=exc,
+            ) from exc
 
     if last_exc:
-        raise last_exc
+        raise ConnectionRetry(
+            ENGINE_NAME,
+            f"Windows Defender connection failed after {MAX_CONNECTION_ATTEMPTS} attempts: {last_exc}",
+            attempts=MAX_CONNECTION_ATTEMPTS,
+            last_exc=last_exc,
+        ) from last_exc
 
     raise RuntimeError("Windows Defender request failed without raising an exception")
 
@@ -190,6 +199,8 @@ def run(file_path: str):
 
     try:
         response, attempts, first_latency_ms = _post_scan(path, url, timeout)
+    except ConnectionRetry:
+        raise
     except requests.RequestException as exc:  # noqa: BLE001 - network/connection errors should be reported
         duration_ms = int((time.monotonic() - start_time) * 1000)
         logger.error(
