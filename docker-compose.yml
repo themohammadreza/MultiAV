@@ -176,6 +176,9 @@ services:
       dockerfile: Dockerfile
       args:
         API_PROXY_TARGET: http://app:8000
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+        NPM_HTTP_PROXY: ${NPM_HTTP_PROXY:-}
+        NPM_HTTPS_PROXY: ${NPM_HTTPS_PROXY:-}
     image: multiav-frontend:latest
     container_name: multiav-frontend
     environment:
@@ -194,6 +197,9 @@ services:
       dockerfile: Dockerfile
       args:
         API_PROXY_TARGET: http://app:8000
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+        NPM_HTTP_PROXY: ${NPM_HTTP_PROXY:-}
+        NPM_HTTPS_PROXY: ${NPM_HTTPS_PROXY:-}
     image: multiav-admin-frontend:latest
     container_name: multiav-admin-frontend
     environment:
